@@ -1,0 +1,41 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "local-windows",
+			"inherits": "win-x64",
+			"environment": {
+				"VCPKG_ROOT": "C:/env/vcpkg",
+				"THIRD_PARTY_DIR": "C:/env/libc++",
+				"CMAKE_PREFIX_PATH": "C:/env/Qt/6.8.3/msvc2022_64"
+			},
+			"cacheVariables": {
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+			}
+		},
+		{
+			"name": "local-linux-debug",
+			"inherits": "linux-x64-dynamic",
+			"environment": {
+				"VCPKG_ROOT": "/opt/vcpkg"
+			},
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_CXX_FLAGS_DEBUG": "-g -O0",
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+			}
+		},
+		{
+			"name": "local-linux-release",
+			"inherits": "linux-x64-dynamic",
+			"environment": {
+				"VCPKG_ROOT": "/opt/vcpkg"
+			},
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_CXX_FLAGS_DEBUG": "-O3 -DNDEBUG",
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+			}
+		}
+	]
+}

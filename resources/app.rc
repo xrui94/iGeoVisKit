@@ -1,0 +1,39 @@
+#include <windows.h>
+#include "resources.h"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"  // enable XP visual styles for controls/windows
+
+600 ICON "Parbat3D.ico"
+
+501 MENU 
+BEGIN
+	POPUP "&File"
+	BEGIN
+		MENUITEM "&Open Image...", IDM_FILEOPEN
+		MENUITEM SEPARATOR
+	//	MENUITEM "&Save", IDM_FILESAVE
+	//	MENUITEM "Save &as...", IDM_FILESAVEAS
+	    MENUITEM "&Close Image", IDM_FILECLOSE
+		MENUITEM SEPARATOR
+		MENUITEM "E&xit", IDM_FILEEXIT
+	END
+
+	POPUP "&Windows"
+	BEGIN
+		MENUITEM "Image", IDM_IMAGEWINDOW
+		MENUITEM "Tools", IDM_TOOLSWINDOW
+		MENUITEM "ROIs", IDM_ROIWINDOW
+		MENUITEM "Contrast Stretch", IDM_CONTSWINDOW
+		MENUITEM SEPARATOR
+		MENUITEM "Reset Positions", IDM_RESETWINPOS
+		MENUITEM "Preferences", IDM_PREFSWINDOW
+		
+	END
+
+	POPUP "&Help"
+	BEGIN
+		MENUITEM "&How to use iGeoVisKit", IDM_HELPCONTENTS
+		MENUITEM SEPARATOR
+		MENUITEM "&About iGeoVisKit...", IDM_HELPABOUT
+	END
+END

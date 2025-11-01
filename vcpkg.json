@@ -1,0 +1,35 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "dependencies": [
+        {
+            "name": "spdlog",
+            "version>=": "1.15.3",
+            "platform": "x64"
+        },
+        {
+            "name": "gdal",
+            "platform": "x64"
+        },
+        {
+            "name": "glad",
+            "platform": "x64",
+            "version>=": "0.1.36#0"
+        },
+        {
+            "name": "stb",
+            "platform": "x64",
+            "version>=": "2024-07-29#1"
+        },
+        {
+            "name": "glm",
+            "platform": "x64",
+            "version>=": "1.0.1#3"
+        }
+    ],
+    "overrides": [
+        {
+            "name": "gdal",
+            "version": "3.9.3#1"
+        }
+    ]
+}

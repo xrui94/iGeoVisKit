@@ -1,0 +1,77 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "common",
+			"hidden": true,
+			"binaryDir": "${sourceDir}/build/${presetName}",
+			"cacheVariables": {
+				"VCPKG_ROOT_DIR": "$env{VCPKG_ROOT}",
+				"THIRD_PARTY_DIR": "$env{THIRD_PARTY_DIR}",
+
+				"CMAKE_CXX_STANDARD": "17",
+				"CMAKE_CXX_STANDARD_REQUIRED": "ON",
+				"CMAKE_CXX_EXTENSIONS": "OFF",
+
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/build/${presetName}/lib",
+
+				"BUILD_SHARED_LIBS": "ON"
+			}
+		},
+		{
+			"name": "vcpkg-common",
+			"hidden": true,
+			"inherits": "common",
+			"cacheVariables": {
+				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+			}
+		},
+		{
+			"name": "win-x64",
+			"inherits": "vcpkg-common",
+			"generator": "Visual Studio 17 2022",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			},
+			"cacheVariables": {
+				"CMAKE_CXX_FLAGS": "/utf-8",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "linux-x64-dynamic",
+			"inherits": "vcpkg-common",
+			"generator": "Unix Makefiles",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Linux"
+			},
+			"environment": {
+				"THIRD_PARTY_DIR": "${sourceDir}/ThirdParty/x64-linux"
+			},
+			"cacheVariables": {
+				"VCPKG_TARGET_TRIPLET": "x64-linux-dynamic",
+        		"VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg/triplets",
+				"VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+			}
+		},
+		{
+			"name": "macos-x64-dynamic",
+			"inherits": "vcpkg-common",
+			"generator": "Unix Makefiles",
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Darwin"
+			},
+			"cacheVariables": {
+				"VCPKG_TARGET_TRIPLET": "x64-osx-dynamic"
+			}
+		}
+	]
+}

@@ -1,0 +1,217 @@
+#include "PchApp.h"
+
+#include "GLView.h"
+
+#include "imagery/Renderer.h"
+#include "opengl/OpenGLContext.h"
+
+#include <QOpenGLContext>
+#include <QSurfaceFormat>
+#include <QWheelEvent>
+
+
+
+#include "config.h"
+#include "utils/Console.h"
+
+// 从PchApp.h获取Qt包含
+// #include <QOpenGLWidget>
+// #include <QSurfaceFormat>
+
+GLView::GLView(QWidget *widget_arg)
+    : QOpenGLWidget(widget_arg)
+{
+    status = 0; // No error
+    error_text = "No error";
+    gladReady = false;
+    
+    // 使用Qt widget替代Windows API
+    widget = widget_arg;
+    
+    // 初始化窗口尺寸
+    window_height = 0;
+    window_width = 0;
+    
+    // 设置 OpenGL 上下文为 3.3 Core Profile
+    QSurfaceFormat format;
+    format.setDepthBufferSize(16);
+    format.setStencilBufferSize(8);
+    format.setVersion(3, 3);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    setFormat(format);
+}
+
+GLView::~GLView()
+{
+    // QOpenGLWidget会自动清理OpenGL上下文
+}
+
+/* Call on window re-size to adjust OpenGL context to fit */
+void GLView::resize(void)
+{
+    // 使用Qt widget获取尺寸
+    if (widget) {
+        window_height = widget->height();
+        window_width = widget->width();
+    }
+    
+    // 调用QOpenGLWidget的resizeGL函数
+    // resizeGL(width(), height());
+}
+
+void GLView::initializeGL()
+{
+    // 初始化 Qt 的 OpenGL 函数指针（必须在上下文可用时调用）
+    //initializeOpenGLFunctions();
+
+    // 使用glad初始化OpenGL函数指针
+    // if (!gladLoadGL()) {
+    //     status = 1;
+    //     error_text = "Failed to initialize GLAD";
+    //     return;
+    // }
+
+    if (!gladLoadGLLoader([](const char* name) -> void* {
+        QOpenGLContext* ctx = QOpenGLContext::currentContext();
+        if (!ctx) return nullptr;
+        return reinterpret_cast<void*>(ctx->getProcAddress(name));
+        })) {
+        qFatal("Failed to initialize GLAD");
+        return;
+    }
+    
+    // 设置OpenGL状态（不透明白色，作为默认背景色）
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    // 防止 Qt 绘制背景导致白屏
+    setAutoFillBackground(false);
+}
+
+void GLView::resizeGL(int w, int h)
+{
+    window_width = w;
+    window_height = h;
+    
+    if (h == 0) h = 1; // 防止除零错误
+    
+    glViewport(0, 0, w, h);
+    // 向外通知尺寸变化，便于首次绘制时更新视口
+    emit resized(w, h);
+}
+
+void GLView::paintGL()
+{
+    // 清除缓冲区，随后委托渲染器进行绘制
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // 上下文已由 QOpenGLWidget 设为当前
+    if (rendererInstance && renderCallback) {
+        OpenGLContext ctx;
+        ctx.bind(this);
+        renderCallback(*rendererInstance, ctx);
+    } else if (renderer) {
+        renderer();
+    }
+}
+
+float GLView::aspect()
+{
+    if (window_height == 0) return 1.0f;
+    return (float)window_width / (float)window_height;
+}
+
+int GLView::height()
+{
+    return window_height;
+}
+
+int GLView::width()
+{
+    return window_width;
+}
+
+// 实现兼容性方法
+void GLView::make_current()
+{
+    // 在需要直接调用 OpenGL 函数前，确保当前上下文有效
+    makeCurrent();
+
+    // 确保在首次使用前初始化 GLAD（如果 initializeGL 尚未运行）
+    if (!gladReady) {
+        if (!gladLoadGLLoader([](const char* name) -> void* {
+            QOpenGLContext* ctx = QOpenGLContext::currentContext();
+            if (!ctx) return nullptr;
+            return reinterpret_cast<void*>(ctx->getProcAddress(name));
+        })) {
+            qFatal("Failed to initialize GLAD (make_current)");
+            return;
+        }
+        // 基础状态设置，避免后续调用使用未定义状态
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        gladReady = true;
+    }
+}
+
+void GLView::swap()
+{
+    // QOpenGLWidget 使用 FBO 进行绘制，触发更新以呈现内容
+    update();
+}
+
+void GLView::setRenderer(const std::function<void()>& fn)
+{
+    renderer = fn;
+}
+
+void GLView::setRendererInstance(const std::shared_ptr<Renderer>& r)
+{
+    rendererInstance = r;
+}
+
+void GLView::setRenderCallback(const std::function<void(Renderer&, OpenGLContext&)>& cb)
+{
+    renderCallback = cb;
+}
+
+void GLView::showEvent(QShowEvent *event)
+{
+    QOpenGLWidget::showEvent(event);
+    // 控件首次可见时，触发一次尺寸通知与绘制，避免首帧空白
+    emit resized(width(), height());
+    update();
+}
+
+void GLView::wheelEvent(QWheelEvent *event)
+{
+    // 使用 Qt6 的 angleDelta 取代旧版 delta
+    const int dy = event->angleDelta().y();
+    const QPointF posf = event->position();
+    emit wheelScrolled(dy, (int)posf.x(), (int)posf.y());
+    event->accept();
+}
+
+void GLView::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        emit mousePressed((int)event->position().x(), (int)event->position().y());
+    }
+    QOpenGLWidget::mousePressEvent(event);
+}
+
+void GLView::mouseMoveEvent(QMouseEvent *event)
+{
+    emit mouseMoved((int)event->buttons(), (int)event->position().x(), (int)event->position().y());
+    QOpenGLWidget::mouseMoveEvent(event);
+}
+
+void GLView::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        emit mouseReleased((int)event->position().x(), (int)event->position().y());
+        event->accept();
+        return;
+    }
+    QOpenGLWidget::mouseReleaseEvent(event);
+}
