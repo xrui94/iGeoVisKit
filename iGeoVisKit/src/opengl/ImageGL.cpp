@@ -698,6 +698,53 @@ void ImageGL::load_tile_tex(int x_index, int y_index) {
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, out8);
             delete[] tex_data;
             delete[] out8;
+        } else if (sampleBytes == 4) {
+            // Float32：自动拉伸到 8 位后上传，支持 NoData 与 gamma
+            bool hasNoDataR = false, hasNoDataG = false, hasNoDataB = false;
+            double ndR = (band_red > 0)   ? image_file->getNoDataValue(band_red, &hasNoDataR)   : 0.0;
+            double ndG = (band_green > 0) ? image_file->getNoDataValue(band_green, &hasNoDataG) : 0.0;
+            double ndB = (band_blue > 0)  ? image_file->getNoDataValue(band_blue, &hasNoDataB)  : 0.0;
+
+            const float* f32 = (const float*)tex_data;
+            unsigned char* out8 = new unsigned char[count * 3];
+
+            // 先扫描 tile 的每通道 min/max（忽略 NoData）
+            float minR = 1e30f, maxR = -1e30f;
+            float minG = 1e30f, maxG = -1e30f;
+            float minB = 1e30f, maxB = -1e30f;
+            for (int i = 0; i < count; ++i) {
+                int o = i * 3;
+                float r = f32[o], g = f32[o+1], b = f32[o+2];
+                bool isNoData = (hasNoDataR && r == (float)ndR) || (hasNoDataG && g == (float)ndG) || (hasNoDataB && b == (float)ndB);
+                if (isNoData) continue;
+                if (r < minR) minR = r; if (r > maxR) maxR = r;
+                if (g < minG) minG = g; if (g > maxG) maxG = g;
+                if (b < minB) minB = b; if (b > maxB) maxB = b;
+            }
+            // 若范围异常，则使用 0–1 作为默认范围
+            bool use01 = false;
+            if (!(maxR > minR) || !(maxG > minG) || !(maxB > minB)) {
+                minR = minG = minB = 0.0f; maxR = maxG = maxB = 1.0f; use01 = true;
+            }
+            float invR = (maxR > minR) ? 1.0f / (maxR - minR) : 1.0f;
+            float invG = (maxG > minG) ? 1.0f / (maxG - minG) : 1.0f;
+            float invB = (maxB > minB) ? 1.0f / (maxB - minB) : 1.0f;
+
+            for (int i = 0; i < count; ++i) {
+                int o = i * 3;
+                float r = f32[o], g = f32[o+1], b = f32[o+2];
+                bool isNoData = (hasNoDataR && r == (float)ndR) || (hasNoDataG && g == (float)ndG) || (hasNoDataB && b == (float)ndB);
+                if (isNoData) { out8[o] = out8[o+1] = out8[o+2] = 0; continue; }
+                float nr = use01 ? r : (r - minR) * invR; if (nr < 0.f) nr = 0.f; if (nr > 1.f) nr = 1.f; nr = powf(nr, 1.0f / gR);
+                float ng = use01 ? g : (g - minG) * invG; if (ng < 0.f) ng = 0.f; if (ng > 1.f) ng = 1.f; ng = powf(ng, 1.0f / gG);
+                float nb = use01 ? b : (b - minB) * invB; if (nb < 0.f) nb = 0.f; if (nb > 1.f) nb = 1.f; nb = powf(nb, 1.0f / gB);
+                out8[o]   = (unsigned char)(nr * 255.0f + 0.5f);
+                out8[o+1] = (unsigned char)(ng * 255.0f + 0.5f);
+                out8[o+2] = (unsigned char)(nb * 255.0f + 0.5f);
+            }
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, out8);
+            delete[] tex_data;
+            delete[] out8;
         } else {
             // Fallback: treat as 8-bit
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_data);

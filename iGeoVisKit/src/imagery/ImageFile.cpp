@@ -156,15 +156,16 @@ void ImageFile::getRasterData(int width, int height, int xpos, int ypos, char* b
 		Console::write("ImageFile - Failed to inform driver of upcoming read!\n");
 	}*/
 	
-    // 参考原始开源实现：统一以 GDT_Byte 读取，确保纹理打包与几何逻辑一致
-    GDALDataType bufType = GDT_Byte;
-    int sampleBytes = 1;
-    int nPixelSpace = bands * sampleBytes;
-    int nLineSpace  = bands * outWidth * sampleBytes;
-    int nBandSpace  = sampleBytes;
-    startTime = GetTickCount();
-    myErr = GDALDatasetRasterIO(ifDataset, GF_Read, xpos, ypos, width, height, buffer, outWidth, outHeight, bufType,
-                                bands, NULL, nPixelSpace, nLineSpace, nBandSpace);
+	// 按源数据类型读取：UInt8→GDT_Byte，UInt16/Int16→各自类型，Float32→GDT_Float32
+	GDALRasterBand* refBand = (GDALRasterBand*)GDALGetRasterBand(ifDataset, 1);
+	GDALDataType bufType = refBand ? GDALGetRasterDataType(refBand) : GDT_Byte;
+	int sampleBytes = std::max(1, GDALGetDataTypeSize(bufType) / 8);
+	int nPixelSpace = bands * sampleBytes;
+	int nLineSpace  = bands * outWidth * sampleBytes;
+	int nBandSpace  = sampleBytes;
+	startTime = GetTickCount();
+	myErr = GDALDatasetRasterIO(ifDataset, GF_Read, xpos, ypos, width, height, buffer, outWidth, outHeight, bufType,
+	                            bands, NULL, nPixelSpace, nLineSpace, nBandSpace);
 	endTime = GetTickCount();
 	elapsedTime = (float)(endTime - startTime) / 1000.0;
 	

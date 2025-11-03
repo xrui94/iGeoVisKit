@@ -59,10 +59,8 @@ ImageTileSet::ImageTileSet(int level_of_detail, ImageFile* file, int tex_size_pa
 	cache_misses = 0;
 	LOD_factor = 0;
 
-    // 从 ImageFile 获取真实样本字节数（支持 16 位等）
-	// 与原始开源项目保持一致：渲染用的 tiles 一律按 8 位字节打包
-	// 即便源影像为 16 位，这里也读取为 8 位，保证与固定管线实现同样的逻辑
-	sample_size = 1;
+    // 从 ImageFile 获取真实样本字节数（支持 8/16/32 位）
+    sample_size = std::max(1, file ? file->getSampleSizeBytes() : 1);
 
 	/* Grab a handle to the image properties object */
 	image_properties = image_file->getImageProperties();
@@ -212,6 +210,33 @@ char* ImageTileSet::get_tile_RGB(int x, int y, int band_R, int band_G, int band_
                 band_G_min = std::min(band_G_min, (int)g); band_G_max = std::max(band_G_max, (int)g);
                 band_B_min = std::min(band_B_min, (int)b); band_B_max = std::max(band_B_max, (int)b);
                 pix16 += 3; piy16 += num_bands;
+            }
+        }
+    } else if (sample_size == 4) {
+        // Float32：把三通道逐像素打包到 out_tile（仍为字节数组，但按 float 写入）
+        float* out32 = (float*)out_tile;
+        const float* tile32 = (const float*)tile;
+        int pix32 = 0;
+        int piy32 = 0;
+        if (band_R && band_G && band_B) {
+            band_R--; band_G--; band_B--;
+            while (pix32 < (size / 4)) { // size 以字节计，这里转为 float 元素数
+                float r = tile32[piy32 + band_R];
+                float g = tile32[piy32 + band_G];
+                float b = tile32[piy32 + band_B];
+                out32[pix32]     = r;
+                out32[pix32 + 1] = g;
+                out32[pix32 + 2] = b;
+                pix32 += 3;
+                piy32 += num_bands;
+            }
+        } else {
+            while (pix32 < (size / 4)) {
+                out32[pix32]     = band_R ? tile32[piy32 + band_R - 1] : 0.0f;
+                out32[pix32 + 1] = band_G ? tile32[piy32 + band_G - 1] : 0.0f;
+                out32[pix32 + 2] = band_B ? tile32[piy32 + band_B - 1] : 0.0f;
+                pix32 += 3;
+                piy32 += num_bands;
             }
         }
     } else {
@@ -403,6 +428,16 @@ unsigned char* ImageTileSet::get_pixel_values(int x, int y)
             // 简易压缩到 8 位，供像素查询；真正拉伸在 ImageGL 进行
             return_values[tmp] = (unsigned char)(v >> 8);
         }
+    } else if (sample_size == 4) {
+        float* p32 = (float*)tile_data;
+        int base32 = (x * num_bands) + (y * tex_size * num_bands);
+        // 简单线性映射到 0–255（这里不做复杂拉伸，仅用于像素查询）
+        for (short tmp = 0; tmp < num_bands; tmp++) {
+            float v = p32[base32 + tmp];
+            // 假设常规归一化范围 0–1；若数据超界则裁剪
+            if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
+            return_values[tmp] = (unsigned char)(v * 255.0f + 0.5f);
+        }
     } else {
         for (short tmp = 0; tmp < num_bands; tmp++) {
             return_values[tmp] = tile_data[pixel_start_bytes + tmp];
@@ -445,6 +480,14 @@ unsigned char* ImageTileSet::get_pixel_values_LOD(int x, int y)
         for (short tmp = 0; tmp < num_bands; tmp++) {
             unsigned short v = p16[base16 + tmp];
             return_values[tmp] = (unsigned char)(v >> 8);
+        }
+    } else if (sample_size == 4) {
+        float* p32 = (float*)tile_data;
+        int base32 = (x * num_bands) + (y * tex_size * num_bands);
+        for (short tmp = 0; tmp < num_bands; tmp++) {
+            float v = p32[base32 + tmp];
+            if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
+            return_values[tmp] = (unsigned char)(v * 255.0f + 0.5f);
         }
     } else {
         for (short tmp = 0; tmp < num_bands; tmp++) {
