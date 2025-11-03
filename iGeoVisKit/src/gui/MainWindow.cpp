@@ -22,7 +22,7 @@
 #include "utils/Console.h"
 #include "imagery/ROISet.h"
 #include "ProgressStatusWidget.h"
-#include "imagery/Renderer.h"
+#include "opengl/Renderer.h"
 #include "imagery/ImageHandler.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -171,11 +171,6 @@ void MainWindow::setupMenus()
     windowMenu_->addAction(prefsWindowAction_);
     windowMenu_->addAction(contrastWindowAction_);
     windowMenu_->addAction(contrastAdvWindowAction_);
-    
-    // 甯姪鑿滃崟
-    helpMenu_ = menuBar()->addMenu("&Help");
-    helpMenu_->addAction(helpContentsAction_);
-    helpMenu_->addAction(aboutAction_);
 
     // 瑙嗗浘鑿滃崟锛堟斁澶?缂╁皬/閫傞厤绐楀彛锛?
     viewMenu_ = menuBar()->addMenu("&View");
@@ -183,6 +178,11 @@ void MainWindow::setupMenus()
     viewMenu_->addAction(zoomOutAction_);
     viewMenu_->addSeparator();
     viewMenu_->addAction(fitToWindowAction_);
+
+    // 甯姪鑿滃崟
+    helpMenu_ = menuBar()->addMenu("&Help");
+    helpMenu_->addAction(helpContentsAction_);
+    helpMenu_->addAction(aboutAction_);
 
     // 缁熶竴鍏ュ彛鍒板伐鍏锋爮
     toolsBar_ = addToolBar("Tools");
