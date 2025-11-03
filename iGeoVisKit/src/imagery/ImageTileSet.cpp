@@ -103,7 +103,7 @@ ImageTileSet::ImageTileSet(int level_of_detail, ImageFile* file, int tex_size_pa
 	Console::write(buffer);
 }
 
-ImageTileSet::~ImageTileSet(void)
+ImageTileSet::~ImageTileSet()
 {
 	Console::write("(II) ImageTileset (LOD:%d) de-allocating... ", LOD);
 	/* De-allocate tiles */
@@ -131,14 +131,13 @@ char* ImageTileSet::get_tile_RGB(int x, int y, int band_R, int band_G, int band_
     out_tile = new char[size];
 
 	/* Check if tile is loaded, load if not */
-	#if DEBUG_IMAGE_TILESET
+#if DEBUG_IMAGE_TILESET
 	sprintf(message, "(II) ImageTileset::get_tile_RGB - tile cache: hits=%d, misses=%d.\n", cache_hits, cache_misses);
 	Console::write(message);
-	#endif
+#endif
+
 	tile_index = this->load_tile(x,y);
 	tile = tiles[tile_index]->data;
-
-
 
 	/* Prevent bug on single channel images */
 	if(band_R>num_bands) band_R = num_bands;
@@ -585,18 +584,15 @@ void ImageTileSet::align_tile(char** tile, int tile_dimension, int data_width, i
     *tile = temp_tile;
 }
 
-void ImageTileSet::get_cache_stats(unsigned int* size_p, unsigned int* fill_p, unsigned int* hits_p, unsigned int* misses_p)
+void ImageTileSet::get_cache_stats(
+	unsigned int* size_p,
+	unsigned int* fill_p,
+	unsigned int* hits_p,
+	unsigned int* misses_p
+) const
 {
 	if (size_p) *size_p = cache_size;
 	if (fill_p) *fill_p = cache_fill;
 	if (hits_p) *hits_p = cache_hits;
 	if (misses_p) *misses_p = cache_misses;
 }
-
-int ImageTileSet::get_texture_size(void) {return tex_size;}
-int ImageTileSet::get_columns(void) {return columns;}
-int ImageTileSet::get_rows(void) {return rows;}
-int ImageTileSet::get_tile_size(void) {return tile_size;}
-int ImageTileSet::get_LOD_width(void) {return LOD_width;}
-int ImageTileSet::get_LOD_height(void) {return LOD_height;}
-int ImageTileSet::get_LOD(void) {return LOD;}
