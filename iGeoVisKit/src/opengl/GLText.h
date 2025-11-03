@@ -15,8 +15,10 @@ Known issues:
 #define GL_TEXT_H
 
 // GLText 仅负责在当前 OpenGL 上下文中渲染文本，不依赖具体视图组件。
+#include <glad/glad.h>
 
 #include <stb_truetype.h>
+
 // 使用 GLM 计算投影矩阵
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

@@ -1,7 +1,7 @@
 #include "PchApp.h"
 #include "OverviewGL.h"
 #include "utils/Console.h"
-#include "imagery/Renderer.h"
+#include "opengl/Renderer.h"
 #include "opengl/OpenGLContext.h"
 
 #include <shellapi.h>
