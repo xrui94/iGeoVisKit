@@ -1,4 +1,4 @@
-﻿#ifndef _IMAGE_HANDLER_H
+#ifndef _IMAGE_HANDLER_H
 #define _IMAGE_HANDLER_H
 
 #include <QWidget>
@@ -42,6 +42,9 @@ public:
 	void set_brightness_contrast(int new_brightness, int new_contrast);
 	void get_brightness_contrast(int* brightness_return, int* contrast_return);
 	void reset_brightness_contrast(void);
+
+	// 拉伸模式设置：转发到 ImageGL
+	void set_stretch_mode(ImageGL::StretchMode m);
 	
 	/* Set Current Mouse Position In Image Co-Ords (For ROI Drawing) */
 	void set_mouse_position(int ix,int iy) {image_gl->set_mouse_position(ix,iy);};

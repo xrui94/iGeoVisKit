@@ -1,4 +1,4 @@
-﻿#include "PchApp.h"
+#include "PchApp.h"
 #include "DisplayTab.h"
 
 #include "config.h"
@@ -69,6 +69,16 @@ groupLayout->addSpacing(8);
 groupLayout->addWidget(new QLabel("B"));
 groupLayout->addWidget(comboB);
 
+// 拉伸模式选择
+groupLayout->addSpacing(10);
+groupLayout->addWidget(new QLabel(QStringLiteral("拉伸模式")));
+comboStretch = new QComboBox(groupBox);
+comboStretch->addItem(QStringLiteral("不拉伸"), (int)ImageGL::StretchNone);
+comboStretch->addItem(QStringLiteral("2–98%"), (int)ImageGL::StretchPercentile2_98);
+comboStretch->addItem(QStringLiteral("1–99%"), (int)ImageGL::StretchPercentile1_99);
+comboStretch->addItem(QStringLiteral("5–95%"), (int)ImageGL::StretchPercentile5_95);
+groupLayout->addWidget(comboStretch);
+
 // 初次填充（依据 ToolWindow.bands）
 int bands = 0;
 if (toolWindow()) bands = toolWindow()->bands;
@@ -90,9 +100,12 @@ void DisplayTab::onUpdateClicked()
 int r = comboR ? comboR->currentData().toInt() : 0;
 int g = comboG ? comboG->currentData().toInt() : 0;
 int b = comboB ? comboB->currentData().toInt() : 0;
+int stretchVal = comboStretch ? comboStretch->currentData().toInt() : (int)ImageGL::StretchPercentile2_98;
 
 if (mainWindow && mainWindow->imageHandler() && mainWindow->imageHandler()->get_image_viewport()) {
 mainWindow->imageHandler()->get_image_viewport()->set_display_bands(r, g, b);
+// 同步拉伸模式
+mainWindow->imageHandler()->set_stretch_mode(static_cast<ImageGL::StretchMode>(stretchVal));
 }
 }
 

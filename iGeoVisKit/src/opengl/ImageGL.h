@@ -29,9 +29,9 @@ class ImageGL : public ViewportListener
 	
 	void set_brightness_contrast(float brightnes_arg, float contrast_arg);
 
-    // 拉伸模式：用于控制 16 位到 8 位的映射
-    enum StretchMode { StretchNone, StretchPercentile2_98 };
-    void setStretchMode(StretchMode m) { stretchMode = m; }
+    // 拉伸模式：用于控制 8/16/32 位到显示范围的映射
+    enum StretchMode { StretchNone, StretchPercentile2_98, StretchPercentile1_99, StretchPercentile5_95 };
+    void setStretchMode(StretchMode m);
 
   private:
 	/* Helper functions */
@@ -122,6 +122,9 @@ class ImageGL : public ViewportListener
         // 当样本为 16 位时的 2–98% 阈值（以原始 16 位范围存储）
         int minR16, minG16, minB16;
         int maxR16, maxG16, maxB16;
+        // Float32 百分位拉伸范围（以源浮点值存储）
+        float minR32, minG32, minB32;
+        float maxR32, maxG32, maxB32;
 		float gammaR, gammaG, gammaB;
         StretchMode stretchMode;
 

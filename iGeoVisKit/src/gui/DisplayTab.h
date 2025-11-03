@@ -19,6 +19,7 @@ class DisplayTab:public ToolTab
         QComboBox *comboR;
         QComboBox *comboG;
         QComboBox *comboB;
+        QComboBox *comboStretch;
         QPushButton *updateButton;
     public:
         const char* GetTabName() {return "Display";};

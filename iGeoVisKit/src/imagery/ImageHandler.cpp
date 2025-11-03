@@ -160,4 +160,12 @@ void ImageHandler::reset_brightness_contrast(void)
 	set_brightness_contrast(250,250);
 }
 
+// 设置影像拉伸模式并请求刷新
+void ImageHandler::set_stretch_mode(ImageGL::StretchMode m)
+{
+	if (image_gl) {
+		image_gl->setStretchMode(m);
+	}
+}
+
 

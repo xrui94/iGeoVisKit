@@ -15,6 +15,7 @@
 #define DEBUG_GL 0
 
 #include <memory>
+#include <cmath>
 
 using namespace std;
 
@@ -370,8 +371,8 @@ ImageGL::ImageGL(QWidget* window_widget, ImageFile* image_file_ptr, ImageViewpor
     minR8 = minG8 = minB8 = 0; maxR8 = maxG8 = maxB8 = 255;
     minR16 = minG16 = minB16 = 0; maxR16 = maxG16 = maxB16 = 65535;
     gammaR = gammaG = gammaB = 1.0f;
-    // 诊断：先关闭自动拉伸，使用原始范围，观察是否仍出现网格伪影
-    stretchMode = StretchNone;
+    // 默认启用 2–98% 百分位拉伸，避免 8/16/32 位影像偏暗或纯白
+    stretchMode = StretchPercentile2_98;
 
 	/* Test that we haven't already messed up... */
 	_GL_CHECK_("ImageGL::ImageGL 初始化结束");
@@ -467,12 +468,52 @@ void ImageGL::notify_bands(void)
 	#endif
 	int r, g, b;
 	viewport->get_display_bands(&band_red, &band_green, &band_blue);
-	// 计算每通道 2–98% 自动拉伸阈值，并重置可选 gamma
-	computeAutoStretchPercentile(2, 98);
+	// 根据当前拉伸模式计算自动拉伸阈值，并重置可选 gamma
+	switch (stretchMode) {
+		case StretchNone:
+			// 不进行拉伸：保持默认范围
+			minR8 = minG8 = minB8 = 0; maxR8 = maxG8 = maxB8 = 255;
+			minR16 = minG16 = minB16 = 0; maxR16 = maxG16 = maxB16 = 65535;
+			minR32 = minG32 = minB32 = 0.0f; maxR32 = maxG32 = maxB32 = 1.0f;
+			break;
+		case StretchPercentile2_98:
+			computeAutoStretchPercentile(2, 98);
+			break;
+		case StretchPercentile1_99:
+			computeAutoStretchPercentile(1, 99);
+			break;
+		case StretchPercentile5_95:
+			computeAutoStretchPercentile(5, 95);
+			break;
+	}
 	gammaR = 1.0f; gammaG = 1.0f; gammaB = 1.0f;
 
 	tile_textures.assign(tile_count, 0);
 	free_textures = textures;
+	notify_viewport();
+}
+
+void ImageGL::setStretchMode(StretchMode m)
+{
+	// 更新模式并按需重新计算百分位阈值
+	stretchMode = m;
+	switch (stretchMode) {
+		case StretchNone:
+			minR8 = minG8 = minB8 = 0; maxR8 = maxG8 = maxB8 = 255;
+			minR16 = minG16 = minB16 = 0; maxR16 = maxG16 = maxB16 = 65535;
+			minR32 = minG32 = minB32 = 0.0f; maxR32 = maxG32 = maxB32 = 1.0f;
+			break;
+		case StretchPercentile2_98:
+			computeAutoStretchPercentile(2, 98);
+			break;
+		case StretchPercentile1_99:
+			computeAutoStretchPercentile(1, 99);
+			break;
+		case StretchPercentile5_95:
+			computeAutoStretchPercentile(5, 95);
+			break;
+	}
+	// 刷新视口显示
 	notify_viewport();
 }
 
@@ -602,8 +643,40 @@ void ImageGL::load_tile_tex(int x_index, int y_index) {
         float gG = gammaG <= 0.0f ? 1.0f : gammaG;
         float gB = gammaB <= 0.0f ? 1.0f : gammaB;
         if (sampleBytes == 1) {
-            // 若关闭拉伸，则直接按原始字节上传，确保严格只显示所选RGB三通道
-            if (stretchMode == StretchNone) {
+            // 若为单波段且存在调色板，则先将索引展开为 RGB
+            int bands = image_file && image_file->getImageProperties() ? image_file->getImageProperties()->getNumBands() : 0;
+            bool expandedPalette = false;
+            if (bands == 1) {
+                BandInfo* bi = image_file->getBandInfo(1);
+                if (bi && bi->getBand()) {
+                    GDALRasterBand* gb = bi->getBand();
+                    GDALColorTableH ct = GDALGetRasterColorTable(gb);
+                    if (ct) {
+                        unsigned char* idx = (unsigned char*)tex_data;
+                        unsigned char* palRGB = new unsigned char[count * 3];
+                        int entryCount = GDALGetColorEntryCount(ct);
+                        for (int i = 0; i < count; ++i) {
+                            int o = i * 3;
+                            int id = (int)idx[o]; // 使用第一个通道作为索引
+                            if (id < 0 || id >= entryCount) {
+                                palRGB[o]   = (unsigned char)id;
+                                palRGB[o+1] = (unsigned char)id;
+                                palRGB[o+2] = (unsigned char)id;
+                            } else {
+                                const GDALColorEntry* e = GDALGetColorEntry(ct, id);
+                                palRGB[o]   = (unsigned char)e->c1;
+                                palRGB[o+1] = (unsigned char)e->c2;
+                                palRGB[o+2] = (unsigned char)e->c3;
+                            }
+                        }
+                        delete[] tex_data;
+                        tex_data = (char*)palRGB;
+                        expandedPalette = true;
+                    }
+                }
+            }
+            // 若关闭拉伸，或刚刚展开了调色板（颜色已映射），则直接上传
+            if (stretchMode == StretchNone || expandedPalette) {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_data);
                 delete[] tex_data;
             } else {
@@ -699,45 +772,51 @@ void ImageGL::load_tile_tex(int x_index, int y_index) {
             delete[] tex_data;
             delete[] out8;
         } else if (sampleBytes == 4) {
-            // Float32：自动拉伸到 8 位后上传，支持 NoData 与 gamma
+            // Float32：优先使用基于全图 2–98% 的百分位范围，其次 BandInfo 的 Min/Max，最后回退 0–1
             bool hasNoDataR = false, hasNoDataG = false, hasNoDataB = false;
             double ndR = (band_red > 0)   ? image_file->getNoDataValue(band_red, &hasNoDataR)   : 0.0;
             double ndG = (band_green > 0) ? image_file->getNoDataValue(band_green, &hasNoDataG) : 0.0;
             double ndB = (band_blue > 0)  ? image_file->getNoDataValue(band_blue, &hasNoDataB)  : 0.0;
 
-            const float* f32 = (const float*)tex_data;
-            unsigned char* out8 = new unsigned char[count * 3];
+            // 先尝试使用百分位范围
+            bool havePctR = (maxR32 > minR32);
+            bool havePctG = (maxG32 > minG32);
+            bool havePctB = (maxB32 > minB32);
+            float minR = havePctR ? minR32 : 0.0f;
+            float maxR = havePctR ? maxR32 : 1.0f;
+            float minG = havePctG ? minG32 : 0.0f;
+            float maxG = havePctG ? maxG32 : 1.0f;
+            float minB = havePctB ? minB32 : 0.0f;
+            float maxB = havePctB ? maxB32 : 1.0f;
 
-            // 先扫描 tile 的每通道 min/max（忽略 NoData）
-            float minR = 1e30f, maxR = -1e30f;
-            float minG = 1e30f, maxG = -1e30f;
-            float minB = 1e30f, maxB = -1e30f;
-            for (int i = 0; i < count; ++i) {
-                int o = i * 3;
-                float r = f32[o], g = f32[o+1], b = f32[o+2];
-                bool isNoData = (hasNoDataR && r == (float)ndR) || (hasNoDataG && g == (float)ndG) || (hasNoDataB && b == (float)ndB);
-                if (isNoData) continue;
-                if (r < minR) minR = r; if (r > maxR) maxR = r;
-                if (g < minG) minG = g; if (g > maxG) maxG = g;
-                if (b < minB) minB = b; if (b > maxB) maxB = b;
-            }
-            // 若范围异常，则使用 0–1 作为默认范围
-            bool use01 = false;
-            if (!(maxR > minR) || !(maxG > minG) || !(maxB > minB)) {
-                minR = minG = minB = 0.0f; maxR = maxG = maxB = 1.0f; use01 = true;
-            }
+            // 若某一通道没有百分位结果，则尝试 BandInfo 的全局范围
+            auto tryBandInfo = [&](int band, float& outMin, float& outMax) {
+                if (outMax > outMin) return; // 已有有效范围
+                if (band > 0 && image_file && image_file->getBandInfo(band)) {
+                    BandInfo* bi = image_file->getBandInfo(band);
+                    double mn = bi->getDataMin(); double mx = bi->getDataMax();
+                    if (mx > mn) { outMin = (float)mn; outMax = (float)mx; }
+                }
+            };
+            tryBandInfo(band_red,   minR, maxR);
+            tryBandInfo(band_green, minG, maxG);
+            tryBandInfo(band_blue,  minB, maxB);
+
             float invR = (maxR > minR) ? 1.0f / (maxR - minR) : 1.0f;
             float invG = (maxG > minG) ? 1.0f / (maxG - minG) : 1.0f;
             float invB = (maxB > minB) ? 1.0f / (maxB - minB) : 1.0f;
 
+            const float* f32 = (const float*)tex_data;
+            unsigned char* out8 = new unsigned char[count * 3];
             for (int i = 0; i < count; ++i) {
                 int o = i * 3;
                 float r = f32[o], g = f32[o+1], b = f32[o+2];
-                bool isNoData = (hasNoDataR && r == (float)ndR) || (hasNoDataG && g == (float)ndG) || (hasNoDataB && b == (float)ndB);
+                bool isNoData = !std::isfinite(r) || !std::isfinite(g) || !std::isfinite(b) ||
+                                (hasNoDataR && r == (float)ndR) || (hasNoDataG && g == (float)ndG) || (hasNoDataB && b == (float)ndB);
                 if (isNoData) { out8[o] = out8[o+1] = out8[o+2] = 0; continue; }
-                float nr = use01 ? r : (r - minR) * invR; if (nr < 0.f) nr = 0.f; if (nr > 1.f) nr = 1.f; nr = powf(nr, 1.0f / gR);
-                float ng = use01 ? g : (g - minG) * invG; if (ng < 0.f) ng = 0.f; if (ng > 1.f) ng = 1.f; ng = powf(ng, 1.0f / gG);
-                float nb = use01 ? b : (b - minB) * invB; if (nb < 0.f) nb = 0.f; if (nb > 1.f) nb = 1.f; nb = powf(nb, 1.0f / gB);
+                float nr = (r - minR) * invR; if (nr < 0.f) nr = 0.f; if (nr > 1.f) nr = 1.f; nr = powf(nr, 1.0f / gR);
+                float ng = (g - minG) * invG; if (ng < 0.f) ng = 0.f; if (ng > 1.f) ng = 1.f; ng = powf(ng, 1.0f / gG);
+                float nb = (b - minB) * invB; if (nb < 0.f) nb = 0.f; if (nb > 1.f) nb = 1.f; nb = powf(nb, 1.0f / gB);
                 out8[o]   = (unsigned char)(nr * 255.0f + 0.5f);
                 out8[o+1] = (unsigned char)(ng * 255.0f + 0.5f);
                 out8[o+2] = (unsigned char)(nb * 255.0f + 0.5f);
@@ -971,13 +1050,22 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 	int w = image_file->getImageProperties() ? image_file->getImageProperties()->getWidth() : 0;
 	int h = image_file->getImageProperties() ? image_file->getImageProperties()->getHeight() : 0;
 	if (w <= 0 || h <= 0) return;
-	
+
+	// 钳制波段索引，避免 1 波段影像时越界访问
+	int bandsCount = image_file->getImageProperties() ? image_file->getImageProperties()->getNumBands() : 0;
+	int br = band_red; int bg = band_green; int bb = band_blue;
+	if (bandsCount > 0) {
+		if (br > bandsCount) br = bandsCount;
+		if (bg > bandsCount) bg = bandsCount;
+		if (bb > bandsCount) bb = bandsCount;
+	}
+
 	// 获取各波段的 NoData 值
 	bool hasNoDataR = false, hasNoDataG = false, hasNoDataB = false;
 	double noDataR = 0, noDataG = 0, noDataB = 0;
-	if (band_red > 0) noDataR = image_file->getNoDataValue(band_red, &hasNoDataR);
-	if (band_green > 0) noDataG = image_file->getNoDataValue(band_green, &hasNoDataG);
-	if (band_blue > 0) noDataB = image_file->getNoDataValue(band_blue, &hasNoDataB);
+	if (br > 0) noDataR = image_file->getNoDataValue(br, &hasNoDataR);
+	if (bg > 0) noDataG = image_file->getNoDataValue(bg, &hasNoDataG);
+	if (bb > 0) noDataB = image_file->getNoDataValue(bb, &hasNoDataB);
 	
 	int sampleBytes = tileset ? tileset->get_sample_size() : image_file->getSampleSizeBytes();
 	if (sampleBytes <= 1) {
@@ -988,7 +1076,7 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 		int blockH = std::min(256, h);
 		int stepX = std::max(blockW, w / 16);
 		int stepY = std::max(blockH, h / 16);
-		int bands = image_file->getImageProperties()->getNumBands();
+		int bands = bandsCount;
 		for (int y0 = 0; y0 < h; y0 += stepY) {
 			for (int x0 = 0; x0 < w; x0 += stepX) {
 				int rw = std::min(blockW, w - x0);
@@ -1000,9 +1088,9 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 				for (int j = 0; j < rh; ++j) {
 					for (int i = 0; i < rw; ++i) {
 						int base = (i * bands) + (j * rw * bands);
-						unsigned char r = (band_red   ? p8[base + (band_red   - 1)] : 0);
-						unsigned char g = (band_green ? p8[base + (band_green - 1)] : 0);
-						unsigned char b = (band_blue  ? p8[base + (band_blue  - 1)] : 0);
+						unsigned char r = (br   ? p8[base + (br   - 1)] : 0);
+						unsigned char g = (bg ? p8[base + (bg - 1)] : 0);
+						unsigned char b = (bb  ? p8[base + (bb  - 1)] : 0);
 						
 						// 排除 NoData 值
 						bool isValidR = !hasNoDataR || (r != (unsigned char)noDataR);
@@ -1028,7 +1116,7 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 		find_range8(histR, minR8, maxR8);
 		find_range8(histG, minG8, maxG8);
 		find_range8(histB, minB8, maxB8);
-	} else {
+	} else if (sampleBytes == 2) {
 		// 16 位：基于采样块构建 0..65535 直方图
 		const int bins = 65536;
 		std::vector<int> histR(bins, 0), histG(bins, 0), histB(bins, 0);
@@ -1036,7 +1124,7 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 		int blockH = std::min(128, h);
 		int stepX = std::max(blockW, w / 16);
 		int stepY = std::max(blockH, h / 16);
-		int bands = image_file->getImageProperties()->getNumBands();
+		int bands = bandsCount;
 		for (int y0 = 0; y0 < h; y0 += stepY) {
 			for (int x0 = 0; x0 < w; x0 += stepX) {
 				int rw = std::min(blockW, w - x0);
@@ -1048,9 +1136,9 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 				for (int j = 0; j < rh; ++j) {
 					for (int i = 0; i < rw; ++i) {
 						int base = (i * bands) + (j * rw * bands);
-						unsigned short r = (band_red   ? p16[base + (band_red   - 1)] : 0);
-						unsigned short g = (band_green ? p16[base + (band_green - 1)] : 0);
-						unsigned short b = (band_blue  ? p16[base + (band_blue  - 1)] : 0);
+						unsigned short r = (br   ? p16[base + (br   - 1)] : 0);
+						unsigned short g = (bg ? p16[base + (bg - 1)] : 0);
+						unsigned short b = (bb  ? p16[base + (bb  - 1)] : 0);
 						
 						// 排除 NoData 值
 						bool isValidR = !hasNoDataR || (r != (unsigned short)noDataR);
@@ -1076,9 +1164,63 @@ void ImageGL::computeAutoStretchPercentile(int lowPct, int highPct)
 		find_range16(histR, minR16, maxR16);
 		find_range16(histG, minG16, maxG16);
 		find_range16(histB, minB16, maxB16);
+	} else if (sampleBytes == 4) {
+		// Float32：采样像素集合，计算 2–98% 百分位，过滤 NaN/Inf，避免依赖 GDAL Min/Max
+		std::vector<float> sampR; std::vector<float> sampG; std::vector<float> sampB;
+		sampR.reserve(200000); sampG.reserve(200000); sampB.reserve(200000);
+		int blockW = std::min(128, w);
+		int blockH = std::min(128, h);
+		int stepX = std::max(blockW, w / 16);
+		int stepY = std::max(blockH, h / 16);
+		int bands = bandsCount;
+		for (int y0 = 0; y0 < h; y0 += stepY) {
+			for (int x0 = 0; x0 < w; x0 += stepX) {
+				int rw = std::min(blockW, w - x0);
+				int rh = std::min(blockH, h - y0);
+				int bufBytes = rw * rh * bands * sampleBytes;
+				char* buf = new char[bufBytes];
+				image_file->getRasterData(rw, rh, x0, y0, buf, rw, rh);
+				float* p32 = (float*)buf;
+				for (int j = 0; j < rh; ++j) {
+					for (int i = 0; i < rw; ++i) {
+						int base = (i * bands) + (j * rw * bands);
+						float r = (br ? p32[base + (br - 1)] : 0.0f);
+						float g = (bg ? p32[base + (bg - 1)] : 0.0f);
+						float b = (bb ? p32[base + (bb - 1)] : 0.0f);
+						bool isValidR = std::isfinite(r) && (!hasNoDataR || r != (float)noDataR);
+						bool isValidG = std::isfinite(g) && (!hasNoDataG || g != (float)noDataG);
+						bool isValidB = std::isfinite(b) && (!hasNoDataB || b != (float)noDataB);
+						if (isValidR) sampR.push_back(r);
+						if (isValidG) sampG.push_back(g);
+						if (isValidB) sampB.push_back(b);
+					}
+				}
+				delete[] buf;
+				// 控制样本规模
+				if (sampR.size() > 200000) sampR.resize(200000);
+				if (sampG.size() > 200000) sampG.resize(200000);
+				if (sampB.size() > 200000) sampB.resize(200000);
+			}
+		}
+		auto pctRange = [&](std::vector<float>& v, float lp, float hp, float& outMin, float& outMax){
+			if (v.empty()) { outMin = 0.0f; outMax = 0.0f; return; }
+			std::sort(v.begin(), v.end());
+			size_t n = v.size();
+			size_t loIdx = (size_t)std::floor((lp/100.0f) * (float)(n-1));
+			size_t hiIdx = (size_t)std::floor((hp/100.0f) * (float)(n-1));
+			outMin = v[loIdx]; outMax = v[hiIdx];
+			// 如果范围过窄或无效，回退到样本整体范围
+			if (!(outMax > outMin) || (outMax - outMin) < 1e-12f) {
+				outMin = v.front(); outMax = v.back();
+			}
+		};
+		pctRange(sampR, (float)lowPct, (float)highPct, minR32, maxR32);
+		pctRange(sampG, (float)lowPct, (float)highPct, minG32, maxG32);
+		pctRange(sampB, (float)lowPct, (float)highPct, minB32, maxB32);
 	}
 
 	// 调试输出：打印当前阈值，便于确认拉伸范围是否异常
-	Console::write("(II) AutoStretch 8-bit: R[%d,%d] G[%d,%d] B[%d,%d]\n", minR8, maxR8, minG8, maxG8, minB8, maxB8);
-	Console::write("(II) AutoStretch 16-bit: R[%d,%d] G[%d,%d] B[%d,%d]\n", minR16, maxR16, minG16, maxG16, minB16, maxB16);
+    Console::write("(II) AutoStretch 8-bit: R[%d,%d] G[%d,%d] B[%d,%d]\n", minR8, maxR8, minG8, maxG8, minB8, maxB8);
+    Console::write("(II) AutoStretch 16-bit: R[%d,%d] G[%d,%d] B[%d,%d]\n", minR16, maxR16, minG16, maxG16, minB16, maxB16);
+    Console::write("(II) AutoStretch 32-bit: R[%f,%f] G[%f,%f] B[%f,%f]\n", minR32, maxR32, minG32, maxG32, minB32, maxB32);
 }
