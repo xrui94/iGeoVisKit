@@ -84,6 +84,9 @@ class ImageGL : public ViewportListener
 		int loc_uTexScale; // 纹理坐标有效区域缩放（边界瓦片）
 		int loc_uAffine; // 图像像素到地理坐标的 2x2 仿射矩阵
 		int loc_uOrigin; // 地理坐标中的原点偏移（GT0, GT3）
+		//// 新增：像素中心补偿（缩放 + 偏移）
+		//int loc_uTexelScale;
+		//int loc_uTexelOffset;
 		std::vector<GLuint> free_textures; // Which IDs are currently un-used
 		std::vector<GLuint> textures; // Which IDs are available (used or not)
 		int viewport_start_row, viewport_start_col;

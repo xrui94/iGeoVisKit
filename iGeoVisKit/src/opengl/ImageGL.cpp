@@ -1,7 +1,7 @@
 #include "PchApp.h"
 #include "ImageGL.h"
 #include "GLUtils.h"
-#include "imagery/Renderer.h"
+#include "opengl/Renderer.h"
 #include "opengl/OpenGLContext.h"
 #include "config.h"
 #include "utils/Settings.h"
@@ -205,12 +205,18 @@ ImageGL::ImageGL(QWidget* window_widget, ImageFile* image_file_ptr, ImageViewpor
             "uniform vec2 uScale;\n"
             "uniform vec2 uOffset;\n"
             "uniform vec2 uTexScale;\n" // 纹理坐标有效区域缩放（边界瓦片）
+			"uniform float uTexelScale;\n"
+			"uniform float uTexelOffset;\n"
             "out vec2 vTex;\n"
             "void main(){\n"
             "    vec2 img = vec2(aPos.x * uScale.x, aPos.y * uScale.y) + uOffset;\n"
             "    // 直接在图像像素坐标系下投影，保持与固定管线 glOrtho(viewport) 一致\n"
             "    vTex = aTex * uTexScale;\n"
             "    gl_Position = uProj * vec4(img, 0.0, 1.0);\n"
+			//"    vec2 uv = aTex * uTexScale;\n"
+			//"    uv = uv * uTexelScale + vec2(uTexelOffset);\n"
+			//"    vTex = uv;\n"
+			//"    gl_Position = uProj * vec4(img, 0.0, 1.0);\n"
             "}";
 		const char* fsSrc =
 			"#version 330 core\n"
@@ -263,6 +269,19 @@ ImageGL::ImageGL(QWidget* window_widget, ImageFile* image_file_ptr, ImageViewpor
         }
         loc_uProj = glGetUniformLocation(glProgram, "uProj");
         loc_uTexScale = glGetUniformLocation(glProgram, "uTexScale");
+
+		//
+		//loc_uTexelScale = glGetUniformLocation(glProgram, "uTexelScale");
+		//loc_uTexelOffset = glGetUniformLocation(glProgram, "uTexelOffset");
+		//if (loc_uTexelScale >= 0) {
+		//	float texScaleBias = (float)(texture_size - 1) / (float)texture_size;
+		//	glUniform1f(loc_uTexelScale, texScaleBias);
+		//}
+		//if (loc_uTexelOffset >= 0) {
+		//	float texOffset = 0.5f / (float)texture_size;
+		//	glUniform1f(loc_uTexelOffset, texOffset);
+		//}
+		
         // 与旧逻辑一致：不使用屏幕缩放与锚点
         loc_uZoom = -1;
         loc_uZoomOffset = -1;
