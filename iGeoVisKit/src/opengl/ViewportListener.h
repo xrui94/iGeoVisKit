@@ -4,9 +4,9 @@
 class ViewportListener
 {
 public:
-  virtual ~ViewportListener() {};
-	virtual void notify_viewport(void);
-	virtual void notify_bands(void);
+	virtual ~ViewportListener() {};
+	virtual void notify_viewport();
+	virtual void notify_bands();
 };
 
 #endif

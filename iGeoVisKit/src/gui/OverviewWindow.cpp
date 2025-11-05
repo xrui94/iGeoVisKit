@@ -2,6 +2,10 @@
 
 #include "OverviewWindow.h"
 
+#include "gui/GLView.h"
+#include "opengl/Renderer.h"
+#include "opengl/OverviewGL.h"
+
 #include "ImageWindow.h"
 #include "MainWindow.h"
 
@@ -25,6 +29,12 @@ OverviewWindow::OverviewWindow(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0,0,0,0);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    // 创建内部 GLView 并加入布局
+    m_glView = new GLView(this);
+    m_glView->setMinimumSize(4, 4);
+    m_glView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layout->addWidget(m_glView);
 }
 
 OverviewWindow::~OverviewWindow()
@@ -74,4 +84,13 @@ int OverviewWindow::getWidth() const
 int OverviewWindow::getHeight() const
 {
     return HEIGHT;
+}
+
+void OverviewWindow::attachRendererAndOverview(const std::shared_ptr<Renderer>& renderer, OverviewGL* ov)
+{
+    if (!m_glView) return;
+    //m_glView->setRendererInstance(renderer);
+    //m_glView->addRenderCallback([ov](Renderer& r){
+    //    if (ov) r.renderOverview(ov);
+    //});
 }

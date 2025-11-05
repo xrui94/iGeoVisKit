@@ -9,11 +9,11 @@
 #include "utils/Console.h"
 #endif
 
-ImageHandler::ImageHandler(QWidget* overview_widget, QWidget* image_widget, const char* filename, ROISet *ROI_set, std::shared_ptr<Renderer> renderer)
+ImageHandler::ImageHandler(const char* filename, ROISet *ROI_set, std::shared_ptr<Renderer> renderer)
 {
-	#if DEBUG_IMAGE_HANDLER
-	Console::write("(II) Initializing image handler(%p, %p, %s)\n", (void*)overview_widget, (void*)image_widget, filename);
-	#endif
+#if DEBUG_IMAGE_HANDLER
+	Console::write("(II) Initializing image handler(%p, %p, %s)\n", /*(void*)overview_widget, (void*)image_widget, */filename);
+#endif
 	
 	// Initialize class variables
 	image_properties = NULL;			
@@ -24,8 +24,8 @@ ImageHandler::ImageHandler(QWidget* overview_widget, QWidget* image_widget, cons
 	contrast_value = 250;
 	
 	// Check for lazily unspecified (NULL argument) parameters
-	assert(overview_widget != NULL);
-	assert(image_widget != NULL);
+	//assert(overview_widget != NULL);
+	//assert(image_widget != NULL);
 	assert(filename != NULL);
 
 	// Initialize image file (could be threaded)
@@ -41,11 +41,11 @@ ImageHandler::ImageHandler(QWidget* overview_widget, QWidget* image_widget, cons
 		image_viewport = new ImageViewport(image_properties);
 		assert(image_viewport != NULL);
 
-		/* Initialize viewports */
-		overview_gl = new OverviewGL(overview_widget, image_file, image_viewport, renderer);
+		/* Initialize overview GL (decoupled from Qt; GLView set up in OverviewWindow) */
+		overview_gl = new OverviewGL(image_file, image_viewport);
 		assert(overview_gl != NULL);
 
-		image_gl = new ImageGL(image_widget, image_file, image_viewport, ROI_set, renderer);
+		image_gl = new ImageGL(image_file, image_viewport, ROI_set, renderer);
 		assert(image_gl != NULL);
 		
 		image_viewport->set_display_bands(1,2,3);
@@ -59,8 +59,8 @@ ImageHandler::ImageHandler(QWidget* overview_widget, QWidget* image_widget, cons
 		printf("DEBUG: Initial zoom level set to: %f\n", image_viewport->get_zoom_level());
 
 		// 初始时主动设置窗口尺寸并触发一次视口通知，确保纹理及时加载
-		image_gl->resize_window();
-		image_viewport->notify_viewport_listeners();
+		//image_gl->resize_window();
+		//image_viewport->notify_viewport_listeners();
 	} else {
 		delete image_file;
 		image_file = NULL;
@@ -98,10 +98,10 @@ BandInfo* ImageHandler::get_band_info(int band_number)
 	return image_file->getBandInfo(band_number);
 }
 
-void ImageHandler::resize_image_window(void)
-{
-    image_gl->resize_window();
-}
+//void ImageHandler::resize_image_window(void)
+//{
+//    image_gl->resize_window();
+//}
 
 /* This function gets pixel values in absolute image coordinates */
 unsigned char* ImageHandler::get_image_pixel_values(int x, int y)

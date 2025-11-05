@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+#include "opengl/OpenGLContext.h"
 #include "opengl/FeatureSpaceGL.h"
 #include "opengl/ImageGL.h"
 #include "opengl/OverviewGL.h"
@@ -11,39 +12,60 @@
 #include <string>
 #include <cstring>
 
-void Renderer::renderFeatureSpace(FeatureSpaceGL* fs, OpenGLContext& ctx)
+Renderer::Renderer()
 {
-	if (!fs || !ctx.boundView()) return;
-	GLView* view = ctx.boundView();
-	std::vector<OpenGLContext::Command> cmds;
-	cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
-	cmds.back().clearColorR = 0.0f;
-	cmds.back().clearColorG = 0.0f;
-	cmds.back().clearColorB = 0.0f;
-	cmds.back().clearColorA = 0.0f;
+	m_ctx = std::make_unique<OpenGLContext>();
+}
 
-	OpenGLContext::Command t1{ OpenGLContext::CmdType::DrawText };
-	t1.text = fs->gl_text;
-	t1.textX = 5;
-	t1.textY = 20;
-	t1.textStr = std::string("Granularity: ") + std::to_string(fs->granularity) + std::string(":1");
-	cmds.push_back(t1);
+Renderer::~Renderer()
+{
+}
 
-	OpenGLContext::Command t2{ OpenGLContext::CmdType::DrawText };
-	t2.text = fs->gl_text;
-	t2.textX = 5;
-	t2.textY = 40;
-	t2.textStr = std::string("Image Points: ") + std::to_string(fs->num_points);
-	cmds.push_back(t2);
+void Renderer::renderFeatureSpace(FeatureSpaceGL* fs)
+{
+    if (!fs) return;
+    // 确保在当前 GL 上下文中完成资源初始化
+    fs->ensureGLResources();
+    std::vector<OpenGLContext::Command> cmds;
+    cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
+    cmds.back().clearColorR = 0.0f;
+    cmds.back().clearColorG = 0.0f;
+    cmds.back().clearColorB = 0.0f;
+    cmds.back().clearColorA = 0.0f;
 
-	OpenGLContext::Command t3{ OpenGLContext::CmdType::DrawText };
-	t3.text = fs->gl_text;
-	t3.textX = 5;
-	t3.textY = 60;
-	t3.textStr = std::string("Unique Points: ") + std::to_string(fs->vertices);
-	cmds.push_back(t3);
+    // 基本状态
+    cmds.push_back({ OpenGLContext::CmdType::EnableDepthTest });
+    cmds.push_back({ OpenGLContext::CmdType::EnableBlend });
+    OpenGLContext::Command bf{ OpenGLContext::CmdType::BlendFunc };
+    bf.blendSrc = GL_SRC_ALPHA;
+    bf.blendDst = GL_ONE_MINUS_SRC_ALPHA;
+    cmds.push_back(bf);
 
-	float aspect = view->aspect();
+    if (fs->gl_text) {
+        OpenGLContext::Command t1{ OpenGLContext::CmdType::DrawText };
+        t1.text = fs->gl_text;
+        t1.textX = 5;
+        t1.textY = 20;
+        t1.textStr = std::string("Granularity: ") + std::to_string(fs->granularity) + std::string(":1");
+        cmds.push_back(t1);
+
+        OpenGLContext::Command t2{ OpenGLContext::CmdType::DrawText };
+        t2.text = fs->gl_text;
+        t2.textX = 5;
+        t2.textY = 40;
+        t2.textStr = std::string("Image Points: ") + std::to_string(fs->num_points);
+        cmds.push_back(t2);
+
+        OpenGLContext::Command t3{ OpenGLContext::CmdType::DrawText };
+        t3.text = fs->gl_text;
+        t3.textX = 5;
+        t3.textY = 60;
+        t3.textStr = std::string("Unique Points: ") + std::to_string(fs->vertices);
+        cmds.push_back(t3);
+    }
+
+	//float aspect = view->aspect();
+	float aspect = 1.f;
 	glm::mat4 proj = glm::perspective(glm::radians(50.0f), aspect, 0.01f, 6.0f);
 	glm::mat4 viewm = glm::mat4(1.0f);
 	glm::mat4 model = glm::mat4(1.0f);
@@ -86,19 +108,33 @@ void Renderer::renderFeatureSpace(FeatureSpaceGL* fs, OpenGLContext& ctx)
 		cmds.push_back(drawPts);
 	}
 	cmds.push_back({ OpenGLContext::CmdType::DisableProgram });
-	ctx.draw(cmds);
+    m_ctx->draw(cmds);
 }
 
-void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
-{
-	if (!igl || !ctx.boundView()) return;
-	GLView* view = ctx.boundView();
+void Renderer::renderImageScene(ImageGL* igl) const
+{	
+	// 确保纹理更新发生在当前 GL 上下文（由 GLView::paintGL 保证）
+	if (igl) {
+		igl->ensureGLResources();
+		// 同步视口参数（x/y/width/height），供 check_textures 计算瓦片范围
+		//igl->render_scene();
+		// 仅在视口有效时才触发纹理检查，避免 zoom_level==0 导致 LOD 计算异常
+		if (igl->viewport_width > 0 && igl->viewport_height > 0) {
+			igl->ensureTexturesForRender();
+		}
+	}
 	std::vector<OpenGLContext::Command> cmds;
 	cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
 	cmds.back().clearColorR = 0.0f;
 	cmds.back().clearColorG = 0.0f;
 	cmds.back().clearColorB = 0.0f;
 	cmds.back().clearColorA = 0.0f;
+
+	// 如果视口无效，则仅清空后返回，避免后续计算与绘制出错
+	if (!igl || igl->viewport_width <= 0 || igl->viewport_height <= 0) {
+		m_ctx->draw(cmds);
+		return;
+	}
 
 	// 调试输出：检查渲染参数
 	printf("DEBUG: renderImageScene - viewport: x=%d, y=%d, w=%d, h=%d\n",
@@ -107,11 +143,15 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 		igl->viewport_start_row, igl->viewport_end_row, igl->viewport_start_col, igl->viewport_end_col);
 
 	// 使用 GLM 的正交投影（像素空间到 NDC），与固定管线 glOrtho 等价
-	int vpX = igl->viewport_x;
-	int vpY = igl->viewport_y;
-	int vpW = igl->viewport_width;
-	int vpH = igl->viewport_height;
-	glm::mat4 proj = glm::ortho((float)vpX, (float)(vpX + vpW), (float)(vpY + vpH), (float)vpY);
+	//int vpX = igl->viewport_x;
+	//int vpY = igl->viewport_y;
+	//int vpW = igl->viewport_width;
+	//int vpH = igl->viewport_height;
+	int vpX = igl->viewport->get_image_x();
+	int vpY = igl->viewport->get_image_y();
+	int vpW = igl->viewport->get_viewport_width();
+	int vpH = igl->viewport->get_viewport_height();
+    glm::mat4 proj = glm::ortho((float)vpX, vpX + (float)vpW, vpY + (float)vpH, (float)vpY, 1.0f, -1.0f);
 
 	bool drewAnyTile = false;
 	printf("DEBUG: renderImageScene - Starting tile loop, tile_textures.size()=%zu\n", igl->tile_textures.size());
@@ -169,8 +209,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 			if (igl->loc_uScale >= 0) {
 				OpenGLContext::Command cScale{ OpenGLContext::CmdType::SetUniform2f };
 				cScale.uniformLoc = igl->loc_uScale;
-				cScale.f2x = (float)tileW;
-				cScale.f2y = (float)tileH;
+				//cScale.f2x = (float)tileW;
+				//cScale.f2y = (float)tileH;
+				cScale.f2x = (float)igl->tile_image_size;
+				cScale.f2y = (float)igl->tile_image_size;
 				cmds.push_back(cScale);
 			}
 
@@ -178,8 +220,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 			if (igl->loc_uOffset >= 0) {
 				OpenGLContext::Command cOff{ OpenGLContext::CmdType::SetUniform2f };
 				cOff.uniformLoc = igl->loc_uOffset;
-				cOff.f2x = offX;
-				cOff.f2y = offY;
+                //cOff.f2x = offX - (float)vpX;
+                //cOff.f2y = offY - (float)vpY;
+				cOff.f2x = x * (float)igl->tile_image_size;
+				cOff.f2y = y * (float)igl->tile_image_size;
 				cmds.push_back(cOff);
 			}
 
@@ -189,8 +233,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 				float sY = (float)tileH / (float)igl->tile_image_size;
 				OpenGLContext::Command cTS{ OpenGLContext::CmdType::SetUniform2f };
 				cTS.uniformLoc = igl->loc_uTexScale;
-				cTS.f2x = sX;
-				cTS.f2y = sY;
+				//cTS.f2x = sX;
+				//cTS.f2y = sY;
+				cTS.f2x = 1.f;
+				cTS.f2y = 1.f;
 				cmds.push_back(cTS);
 			}
 
@@ -210,10 +256,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 
 			// Debug: draw tile outline to验证几何位置（使用 ROI 程序）
 			if (m_debugShowTileOutlines && igl->glRoiProgram != 0) {
-				float x0 = (float)(x * igl->tile_image_size);
-				float y0 = (float)(y * igl->tile_image_size);
-				float x1 = x0 + (float)tileW;
-				float y1 = y0 + (float)tileH;
+                float x0 = (float)(x * igl->tile_image_size) - (float)vpX;
+                float y0 = (float)(y * igl->tile_image_size) - (float)vpY;
+                float x1 = x0 + (float)tileW;
+                float y1 = y0 + (float)tileH;
 				struct V2 {
 					float x;
 					float y;
@@ -337,12 +383,12 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 						rBD.bufUsage = GL_DYNAMIC_DRAW;
 						rBD.bufBytes.resize(pts.size() * 2 * sizeof(float));
 						float* out = reinterpret_cast<float*>(rBD.bufBytes.data());
-						for (size_t k = 0;
-							k < pts.size();
-							++k) {
-							out[k * 2 + 0] = (float)pts[k].x;
-							out[k * 2 + 1] = (float)pts[k].y;
-						}
+                        for (size_t k = 0;
+                            k < pts.size();
+                            ++k) {
+                            out[k * 2 + 0] = (float)pts[k].x - (float)vpX;
+                            out[k * 2 + 1] = (float)pts[k].y - (float)vpY;
+                        }
 						cmds.push_back(rBD);
 
 						OpenGLContext::Command rDraw{ OpenGLContext::CmdType::DrawArrays };
@@ -357,8 +403,8 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 						rBD.bufUsage = GL_DYNAMIC_DRAW;
 						rBD.bufBytes.resize(2 * sizeof(float));
 						float* out = reinterpret_cast<float*>(rBD.bufBytes.data());
-						out[0] = (float)pts[0].x;
-						out[1] = (float)pts[0].y;
+                        out[0] = (float)pts[0].x - (float)vpX;
+                        out[1] = (float)pts[0].y - (float)vpY;
 						cmds.push_back(rBD);
 
 						OpenGLContext::Command rDraw{ OpenGLContext::CmdType::DrawArrays };
@@ -371,10 +417,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 					if (pts.size() >= 2) {
 						coords tl = pts[0];
 						coords br = pts[1];
-						float rect[8] = {
-							(float)tl.x, (float)tl.y, (float)tl.x, (float)br.y,
-							(float)br.x, (float)br.y, (float)br.x, (float)tl.y
-						};
+                        float rect[8] = {
+                            (float)tl.x - (float)vpX, (float)tl.y - (float)vpY, (float)tl.x - (float)vpX, (float)br.y - (float)vpY,
+                            (float)br.x - (float)vpX, (float)br.y - (float)vpY, (float)br.x - (float)vpX, (float)tl.y - (float)vpY
+                        };
 						OpenGLContext::Command rBD{ OpenGLContext::CmdType::BufferData };
 						rBD.bufUsage = GL_DYNAMIC_DRAW;
 						rBD.bufBytes.resize(sizeof(rect));
@@ -410,14 +456,14 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 					rBD.bufUsage = GL_DYNAMIC_DRAW;
 					rBD.bufBytes.resize((pts.size() + 1) * 2 * sizeof(float));
 					float* out = reinterpret_cast<float*>(rBD.bufBytes.data());
-					for (size_t k = 0;
-						k < pts.size();
-						++k) {
-						out[k * 2 + 0] = (float)pts[k].x;
-						out[k * 2 + 1] = (float)pts[k].y;
-					}
-					out[pts.size() * 2 + 0] = (float)igl->mouse_x;
-					out[pts.size() * 2 + 1] = (float)igl->mouse_y;
+                    for (size_t k = 0;
+                        k < pts.size();
+                        ++k) {
+                        out[k * 2 + 0] = (float)pts[k].x - (float)vpX;
+                        out[k * 2 + 1] = (float)pts[k].y - (float)vpY;
+                    }
+                    out[pts.size() * 2 + 0] = (float)igl->mouse_x - (float)vpX;
+                    out[pts.size() * 2 + 1] = (float)igl->mouse_y - (float)vpY;
 					cmds.push_back(rBD);
 
 					OpenGLContext::Command rDraw{ OpenGLContext::CmdType::DrawArrays };
@@ -426,10 +472,10 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 					cmds.push_back(rDraw);
 				}
 				else if (type == ROI_RECT) {
-					float rect[8] = {
-						(float)pts[0].x, (float)pts[0].y, (float)pts[0].x, (float)igl->mouse_y,
-						(float)igl->mouse_x, (float)igl->mouse_y, (float)igl->mouse_x, (float)pts[0].y
-					};
+                    float rect[8] = {
+                        (float)pts[0].x - (float)vpX, (float)pts[0].y - (float)vpY, (float)pts[0].x - (float)vpX, (float)igl->mouse_y - (float)vpY,
+                        (float)igl->mouse_x - (float)vpX, (float)igl->mouse_y - (float)vpY, (float)igl->mouse_x - (float)vpX, (float)pts[0].y - (float)vpY
+                    };
 					OpenGLContext::Command rBD{ OpenGLContext::CmdType::BufferData };
 					rBD.bufUsage = GL_DYNAMIC_DRAW;
 					rBD.bufBytes.resize(sizeof(rect));
@@ -447,29 +493,37 @@ void Renderer::renderImageScene(ImageGL* igl, OpenGLContext& ctx) const
 
 		cmds.push_back({ OpenGLContext::CmdType::DisableProgram });
 	}
-	if (!drewAnyTile && igl->gl_text) {
-		OpenGLContext::Command t{ OpenGLContext::CmdType::DrawText };
-		t.text = igl->gl_text;
-		t.textX = 20;
-		t.textY = 30;
-		t.textStr = std::string("无图像");
-		cmds.push_back(t);
-	}
-	if (igl->gl_text) {
-		OpenGLContext::Command t{ OpenGLContext::CmdType::DrawText };
-		t.text = igl->gl_text;
-		t.textX = 10;
-		t.textY = 20;
-		t.textStr = std::string("Redrawing viewport at ") + std::to_string(igl->viewport_x) + std::string(",") + std::to_string(igl->viewport_y) + std::string(".");
-		cmds.push_back(t);
-	}
-	ctx.draw(cmds);
+
+	//
+	//if (!drewAnyTile && igl->gl_text) {
+	//	OpenGLContext::Command t{ OpenGLContext::CmdType::DrawText };
+	//	t.text = igl->gl_text;
+	//	t.textX = 20;
+	//	t.textY = 30;
+	//	t.textStr = std::string("无图像");
+	//	cmds.push_back(t);
+	//}
+	//if (igl->gl_text) {
+	//	OpenGLContext::Command t{ OpenGLContext::CmdType::DrawText };
+	//	t.text = igl->gl_text;
+	//	t.textX = 10;
+	//	t.textY = 20;
+	//	t.textStr = std::string("Redrawing viewport at ") + std::to_string(igl->viewport_x) + std::string(",") + std::to_string(igl->viewport_y) + std::string(".");
+	//	cmds.push_back(t);
+	//}
+
+	m_ctx->draw(cmds);
 }
 
-void Renderer::renderOverview(OverviewGL* ov, OpenGLContext& ctx)
+void Renderer::renderOverview(OverviewGL* ov)
 {
-	if (!ov || !ctx.boundView()) return;
-	GLView* view = ctx.boundView();
+	//if (!ov || !ctx.boundView()) return;
+	//GLView* view = ctx.boundView();
+	// 确保概览的 GL 资源与纹理在当前上下文中准备好
+	if (ov) {
+		ov->ensureGLResources();
+		ov->make_texture();
+	}
 	std::vector<OpenGLContext::Command> cmds;
 	cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
 	cmds.back().clearColorR = 0.0f;
@@ -611,5 +665,5 @@ void Renderer::renderOverview(OverviewGL* ov, OpenGLContext& ctx)
 
 	cmds.push_back({ OpenGLContext::CmdType::DisableProgram });
 	cmds.push_back({ OpenGLContext::CmdType::DisableBlend });
-	ctx.draw(cmds);
+	m_ctx->draw(cmds);
 }

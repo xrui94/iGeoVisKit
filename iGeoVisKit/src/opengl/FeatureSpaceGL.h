@@ -2,15 +2,12 @@
 #define FEATURE_SPACE_GL_H
 
 #include "GLText.h"
-#include "gui/GLView.h"
 #include "PointsHash.h"
 #include <memory>
 
 class Renderer;
 
-// Qt includes
-#include <QWidget>
-#include <QOpenGLWidget>
+// 移除 Qt 依赖，实现与 Qt 解耦
 
 // 固定管线特性在 Core Profile 下不可用，禁用点精灵路径
 #define USE_POINT_SPRITES 0
@@ -34,13 +31,12 @@ class FeatureSpaceGL
 {
 public:
 	// FeatureSpaceGL(HWND hwnd_arg, int LOD_arg, int band1, int band2, int band3);
-	FeatureSpaceGL(QWidget *widget_arg, int LOD_arg, int band1, int band2, int band3, std::shared_ptr<Renderer> renderer);
+	FeatureSpaceGL(int LOD_arg, int band1, int band2, int band3);
 	// 准备数据后通过 Renderer 渲染
 	void draw(void);
 	void resize(void);
 	
 	void translate_cam(float x, float y);
-	void dolly_cam(float diff);
 	void rot_cam(float x_diff, float y_diff);
 	void zoom_cam(float diff);
     
@@ -58,7 +54,9 @@ private:
 	friend class Renderer;
 	// 数据准备：公开给 Renderer 使用
 	GLText* gl_text;
-	GLView* gl_view;
+
+	// 在有效的 GL 上下文中初始化着色器与缓冲区
+	void ensureGLResources();
 		
         void build_box_buffers(void);
 
@@ -92,7 +90,7 @@ private:
     
     int band1, band2, band3;
     
-    // QWidget *widget;  // 保存Qt widget引用
+    // QWidget *widget;  // 保存Qt widget引用（已移除）
 };
 
 #endif

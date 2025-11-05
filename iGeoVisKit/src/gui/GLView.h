@@ -30,7 +30,7 @@ public:
     void setRenderer(const std::function<void()>& fn);
     // 新增：设置 Renderer 实例与上下文感知的回调
     void setRendererInstance(const std::shared_ptr<class Renderer>& renderer);
-    void setRenderCallback(const std::function<void(class Renderer&, class OpenGLContext&)>& cb);
+    void addRenderCallback(const std::function<void(class Renderer&)>& cb);
     
     // 移除Windows特定的方法
     // HDC get_device_context();
@@ -53,16 +53,17 @@ signals:
     void mouseReleased(int x, int y);
 
 private:
-    // 添加缺失的成员变量
+    // 
+    bool m_initialized = false;
     int status;
     const char* error_text;
-    QWidget* widget;
+    //QWidget* widget;
     int window_height;
     int window_width;
     bool gladReady;
     std::function<void()> renderer;
     std::shared_ptr<class Renderer> rendererInstance;
-    std::function<void(class Renderer&, class OpenGLContext&)> renderCallback;
+    std::vector<std::function<void(class Renderer&)>> m_renderCallbacks;
 };
 
 #endif

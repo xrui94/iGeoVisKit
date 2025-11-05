@@ -26,11 +26,11 @@ GLView::GLView(QWidget *widget_arg)
     gladReady = false;
     
     // 使用Qt widget替代Windows API
-    widget = widget_arg;
+    //widget = widget_arg;
     
     // 初始化窗口尺寸
-    window_height = 0;
-    window_width = 0;
+    //window_height = 0;
+    //window_width = 0;
     
     // 设置 OpenGL 上下文为 3.3 Core Profile
     QSurfaceFormat format;
@@ -47,16 +47,16 @@ GLView::~GLView()
 }
 
 /* Call on window re-size to adjust OpenGL context to fit */
-void GLView::resize(void)
+void GLView::resize()
 {
     // 使用Qt widget获取尺寸
-    if (widget) {
-        window_height = widget->height();
-        window_width = widget->width();
-    }
+    //if (widget) {
+    //    window_height = widget->height();
+    //    window_width = widget->width();
+    //}
     
     // 调用QOpenGLWidget的resizeGL函数
-    // resizeGL(width(), height());
+    resizeGL(width(), height());
 }
 
 void GLView::initializeGL()
@@ -79,13 +79,15 @@ void GLView::initializeGL()
         qFatal("Failed to initialize GLAD");
         return;
     }
+
+    m_initialized = true;
     
-    // 设置OpenGL状态（不透明白色，作为默认背景色）
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+    //// 设置OpenGL状态（不透明白色，作为默认背景色）
+    //glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    //glEnable(GL_DEPTH_TEST);
+    //glDepthFunc(GL_LESS);
     // 防止 Qt 绘制背景导致白屏
-    setAutoFillBackground(false);
+    //setAutoFillBackground(false);
 }
 
 void GLView::resizeGL(int w, int h)
@@ -102,15 +104,29 @@ void GLView::resizeGL(int w, int h)
 
 void GLView::paintGL()
 {
-    // 清除缓冲区，随后委托渲染器进行绘制
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    // 上下文已由 QOpenGLWidget 设为当前
-    if (rendererInstance && renderCallback) {
-        OpenGLContext ctx;
-        ctx.bind(this);
-        renderCallback(*rendererInstance, ctx);
-    } else if (renderer) {
-        renderer();
+    if (m_initialized) {
+        // 清除缓冲区，随后委托渲染器进行绘制
+        glClearColor(0.2f, 0.2f, 0.9f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        // 上下文已由 QOpenGLWidget 设为当前
+        if (rendererInstance) {
+            for (const auto& renderCallback : m_renderCallbacks) {
+                if (renderCallback) {
+                    //ctx.bind(this);
+                    renderCallback(*rendererInstance);
+                    //swap();
+                }
+            }
+        }
+        else if (renderer) {
+            renderer();
+        }
+    }
+    else {
+        glClearColor(0.2f, 0.2f, 0.9f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 }
 
@@ -136,22 +152,22 @@ void GLView::make_current()
     // 在需要直接调用 OpenGL 函数前，确保当前上下文有效
     makeCurrent();
 
-    // 确保在首次使用前初始化 GLAD（如果 initializeGL 尚未运行）
-    if (!gladReady) {
-        if (!gladLoadGLLoader([](const char* name) -> void* {
-            QOpenGLContext* ctx = QOpenGLContext::currentContext();
-            if (!ctx) return nullptr;
-            return reinterpret_cast<void*>(ctx->getProcAddress(name));
-        })) {
-            qFatal("Failed to initialize GLAD (make_current)");
-            return;
-        }
-        // 基础状态设置，避免后续调用使用未定义状态
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        gladReady = true;
-    }
+    //// 确保在首次使用前初始化 GLAD（如果 initializeGL 尚未运行）
+    //if (!gladReady) {
+    //    if (!gladLoadGLLoader([](const char* name) -> void* {
+    //        QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    //        if (!ctx) return nullptr;
+    //        return reinterpret_cast<void*>(ctx->getProcAddress(name));
+    //    })) {
+    //        qFatal("Failed to initialize GLAD (make_current)");
+    //        return;
+    //    }
+    //    // 基础状态设置，避免后续调用使用未定义状态
+    //    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    //    glEnable(GL_DEPTH_TEST);
+    //    glDepthFunc(GL_LESS);
+    //    gladReady = true;
+    //}
 }
 
 void GLView::swap()
@@ -170,9 +186,9 @@ void GLView::setRendererInstance(const std::shared_ptr<Renderer>& r)
     rendererInstance = r;
 }
 
-void GLView::setRenderCallback(const std::function<void(Renderer&, OpenGLContext&)>& cb)
+void GLView::addRenderCallback(const std::function<void(Renderer&)>& cb)
 {
-    renderCallback = cb;
+    m_renderCallbacks.push_back(cb);
 }
 
 void GLView::showEvent(QShowEvent *event)

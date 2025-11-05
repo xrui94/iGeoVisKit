@@ -10,6 +10,10 @@
 	includes, declarations, or code.
 */ 
 
+
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>  // for glm::value_ptr
+
 // We use std::string all over the place, but other std:: namespaces should be
 // explicit
 #include <string>

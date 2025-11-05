@@ -12,58 +12,34 @@
 
 #define DEBUG_GL 0
 
-OverviewGL::OverviewGL(QWidget* window_widget, ImageFile* image_file, ImageViewport* image_viewport_param, std::shared_ptr<Renderer> renderer)
+OverviewGL::OverviewGL(ImageFile* image_file, ImageViewport* image_viewport_param)
 {
-	ImageProperties* image_properties;
-	
-	assert(image_file != NULL);
-	assert(image_viewport_param != NULL);
-	assert(renderer != nullptr);
-	
-	viewport = image_viewport_param;
-	viewport->register_listener(this);
-	viewport->get_display_bands(&band_red, &band_green, &band_blue);
-	
-	image_properties = image_file->getImageProperties();
-	image_height = image_properties->getHeight();
-	image_width = image_properties->getWidth();
-	
-	tex_overview_id = 0;
-	glInitialized = false;
-		
-    /* Initialize OpenGL*/
-    gl_overview = new GLView(window_widget);
-    // 将 GL 视图加入父容器布局，保证尺寸和可见性
-    if (window_widget) {
-        QLayout *lyt = window_widget->layout();
-        if (!lyt) {
-            auto *v = new QVBoxLayout(window_widget);
-            v->setContentsMargins(0,0,0,0);
-            lyt = v;
-        }
-        // 防御性：避免首次为零尺寸导致无法绘制
-        gl_overview->setMinimumSize(4, 4);
-        gl_overview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        lyt->addWidget(gl_overview);
-    }
-    // 将绘制逻辑委托给统一 Renderer（由 GLView 管理实例与上下文）
-    gl_overview->setRendererInstance(renderer);
-    gl_overview->setRenderCallback([this](Renderer& r, OpenGLContext& ctx) {
-        r.renderOverview(this, ctx);
-    });
+    ImageProperties* image_properties;
+    
+    assert(image_file != NULL);
+    assert(image_viewport_param != NULL);
+    
+    viewport = image_viewport_param;
+    viewport->register_listener(this);
+    viewport->get_display_bands(&band_red, &band_green, &band_blue);
+    
+    image_properties = image_file->getImageProperties();
+    image_height = image_properties->getHeight();
+    image_width = image_properties->getWidth();
+    
+    tex_overview_id = 0;
+    glInitialized = false;
 
-	// Avoid OpenGL calls here; resources are created lazily on first use
-	texture_size = 512; // default until context is available
-	tileset = new ImageTileSet(-1, image_file, texture_size, 0);
-	LOD_height = tileset->get_LOD_height();
-	LOD_width = tileset->get_LOD_width();
-    gl_overview->resize();
+    // Avoid OpenGL calls here; resources are created lazily on first render
+    texture_size = 512; // default until context is available
+    tileset = new ImageTileSet(-1, image_file, texture_size, 0);
+    LOD_height = tileset->get_LOD_height();
+    LOD_width = tileset->get_LOD_width();
 }
 
 void OverviewGL::ensureGLResources()
 {
     if (glInitialized) return;
-    gl_overview->make_current();
     glDisable(GL_DEPTH_TEST);
 
     // Build shader programs and VBOs for modern pipeline
@@ -155,16 +131,13 @@ void OverviewGL::ensureGLResources()
 
 OverviewGL::~OverviewGL()
 {
-	delete gl_overview;
-	delete tileset;
+    delete tileset;
 }
 
 /* Re-draw our overview window */
 void OverviewGL::notify_viewport(void)
 {
-    // 仅触发刷新，由 paintGL 调用 render_scene 完成绘制
-    ensureGLResources();
-    gl_overview->swap();
+    // 视口变化仅记录，渲染阶段读取最新参数；不进行 OpenGL 调用
 }
 
 void OverviewGL::render_scene()
@@ -176,44 +149,8 @@ void OverviewGL::render_scene()
 
 void OverviewGL::notify_bands(void)
 {
-	char* tex_overview;
-#if DEBUG_GL
-	Console::write("(II) OverviewGL re-texturing.\n");
-#endif
-	/* Make a texture if it doesn't exist */
-	gl_overview->make_current();
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	if (glIsTexture(tex_overview_id) != GL_TRUE) {
-		GLint proxy_width;
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-		glGenTextures(1, &tex_overview_id);
-		glBindTexture(GL_TEXTURE_2D, (GLuint) tex_overview_id);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		
-		/* Load proxy texture to check for enough space */
-		glTexImage2D(GL_PROXY_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-		glGetTexLevelParameteriv(GL_PROXY_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &proxy_width);
-		// If allocation would have failed
-		if (proxy_width == 0) {
-			tex_overview_id = 0; // Stop next loop from using the texture
-			assert(proxy_width > 0); // If we have debugging, show a nasty error
-			return;
-		}
-	}
-	
-	// Get texture data	
-	viewport->get_display_bands(&band_red, &band_green, &band_blue);
-	tex_overview = tileset->get_tile_RGB(0, 0, band_red, band_green, band_blue);
-	// Select our texture and load the data into it
-	glBindTexture(GL_TEXTURE_2D, (GLuint) tex_overview_id);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_overview);
-	/* remember to free the RGB memory */
-	delete[] tex_overview;
-	
-	notify_viewport();
+    // 仅更新当前波段设置，纹理更新在渲染阶段进行
+    viewport->get_display_bands(&band_red, &band_green, &band_blue);
 }
 
 void OverviewGL::set_brightness_contrast(float brightness_arg, float contrast_arg)
@@ -221,9 +158,28 @@ void OverviewGL::set_brightness_contrast(float brightness_arg, float contrast_ar
 	#if DEBUG_GL
 	Console::write("OverviewGL::set_brightness_contrast(%1.4f,%1.4f)\n", brightness_arg, contrast_arg);
 	#endif
+    // 在现代或不支持 Imaging 子集的上下文中，避免使用 GL_COLOR 矩阵操作。
+    // 亮度/对比度效果改为在纹理生成阶段处理；此处仅触发带更新。
+    notify_bands();
+}
 
-	gl_overview->make_current();
-	// 在现代或不支持 Imaging 子集的上下文中，避免使用 GL_COLOR 矩阵操作。
-	// 亮度/对比度效果改为在文本或纹理生成阶段处理；此处仅触发带更新。
-	notify_bands();
+// 在当前上下文中生成或更新概览纹理（由 Renderer 渲染阶段调用）
+void OverviewGL::make_texture(void)
+{
+    if (glIsTexture(tex_overview_id) != GL_TRUE) {
+        glGenTextures(1, &tex_overview_id);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)tex_overview_id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, (GLuint)tex_overview_id);
+    }
+
+    viewport->get_display_bands(&band_red, &band_green, &band_blue);
+    char* tex_overview = tileset->get_tile_RGB(0, 0, band_red, band_green, band_blue);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_size, texture_size, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_overview);
+    delete[] tex_overview;
 }

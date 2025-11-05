@@ -42,21 +42,14 @@
 #include <fcntl.h>
 #include <cstdio>
 
-using namespace std;
-
 
 char szStaticControl[] = "static";  /* classname of static text control */
-
-HINSTANCE hThisInstance;            /* a handle that identifies our process */
-
-HWND hDesktop;                      /* handle to desktop window (used for snapping) */
 
 settings* settingsFile;             /* Used for loading and saving window position and sizes */
 
 ROISet *regionsSet;
 
 MainWindow* mainWindow = nullptr;
-vector<FeatureSpace*> featureSpaceWindows;
 
 
 char *modulePath=NULL;                  /* used to store the path to this executable's directory */
@@ -264,27 +257,27 @@ int main(int argc, char *argv[])
     return app.exec();
 }
 
-void emptyOutMessageQueue()
-{
-	MSG messages;
+// void emptyOutMessageQueue()
+// {
+// 	MSG messages;
 	
-     /* Execute the message loop for every message that is waiting to be processed */
-    while(PeekMessage(&messages, NULL, 0, 0, PM_REMOVE))
-    {
-        /* Translate keyboard events */
-        //TranslateMessage(&messages);
-        /* Send message to the associated window procedure */
-        //DispatchMessage(&messages);
-        DefWindowProc(messages.hwnd,messages.message,messages.lParam,messages.wParam);
-    }
-}
+//      /* Execute the message loop for every message that is waiting to be processed */
+//     while(PeekMessage(&messages, NULL, 0, 0, PM_REMOVE))
+//     {
+//         /* Translate keyboard events */
+//         //TranslateMessage(&messages);
+//         /* Send message to the associated window procedure */
+//         //DispatchMessage(&messages);
+//         DefWindowProc(messages.hwnd,messages.message,messages.lParam,messages.wParam);
+//     }
+// }
 
-void orderWindows()
-{
-    // 浣跨敤Qt鐨勬柟寮忓鐞嗙獥鍙ｉ『搴?
-    // SetWindowPos(imageWindow.GetHandle(),toolWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
-    // SetWindowPos(imageWindow.GetHandle(),overviewWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
-    // SetWindowPos(imageWindow.GetHandle(),roiWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);
-    // SetWindowPos(imageWindow.GetHandle(),contrastWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
-}
+// void orderWindows()
+// {
+//     // 浣跨敤Qt鐨勬柟寮忓鐞嗙獥鍙ｉ『搴?
+//     // SetWindowPos(imageWindow.GetHandle(),toolWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
+//     // SetWindowPos(imageWindow.GetHandle(),overviewWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
+//     // SetWindowPos(imageWindow.GetHandle(),roiWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);
+//     // SetWindowPos(imageWindow.GetHandle(),contrastWindow.GetHandle(),0,0,0,0,SWP_NOMOVE+SWP_NOSIZE+SWP_NOACTIVATE+SWP_NOSENDCHANGING);        
+// }
 

@@ -10,20 +10,20 @@
 
 
 OpenGLContext::OpenGLContext()
-	: m_view(nullptr)
+	/* : m_view(nullptr)*/
 {
 }
 
 OpenGLContext::~OpenGLContext()
 {
-	m_view = nullptr;
+	//m_view = nullptr;
 }
 
 // 执行一组命令，确保所有 DrawCall 在此函数内部进行
 void OpenGLContext::draw(const std::vector<Command>& commands)
 {
-	if (!m_view) return;
-	m_view->make_current();
+	//if (!m_view) return;
+	//m_view->make_current();
 	for (const auto& cmd : commands) {
 		switch (cmd.type) {
 		case CmdType::ClearColorDepth:
@@ -107,5 +107,5 @@ void OpenGLContext::draw(const std::vector<Command>& commands)
 		}
 	}
 	glBindVertexArray(0);
-	m_view->swap();
+	//m_view->swap();
 }

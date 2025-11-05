@@ -5,6 +5,7 @@
 extern MainWindow* mainWindow;
 // #include "Window.h"  // 绉婚櫎瀵筗indow.h鐨勪緷璧?
 #include "FeatureSpace.h"
+#include "opengl/Renderer.h"
 #include "GLContainer.h"
 #include "config.h"
 #include "utils/Console.h"
@@ -68,15 +69,48 @@ void FeatureSpace::init()
     numFeatureSpaces++;
     
     Console::write("FeatureSpace -- seting up opengl stuff...\n");
-    // 统一传递共享 Renderer 实例
+    // 构造与 Qt 解耦的 FeatureSpaceGL
     fsgl = new FeatureSpaceGL(
-        glContainer,
         theLOD,
         band1,
         band2,
-        band3,
-        (mainWindow ? mainWindow->getRenderer() : std::shared_ptr<Renderer>())
+        band3
     );
+
+    // 在 GLContainer 内部创建 GLView 并接线 Renderer
+    if (glContainer && m_glView == nullptr) {
+        // 为容器建立零边距布局
+        QVBoxLayout *lyt = new QVBoxLayout(glContainer);
+        lyt->setContentsMargins(0,0,0,0);
+        lyt->setSpacing(0);
+        m_glView = new GLView(glContainer);
+        m_glView->setMinimumSize(4,4);
+        m_glView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        lyt->addWidget(m_glView);
+
+        // 接线渲染器与渲染回调
+        if (mainWindow && mainWindow->getRenderer()) {
+            m_glView->setRendererInstance(mainWindow->getRenderer());
+            m_glView->addRenderCallback([this](Renderer &r){
+                if (this->fsgl) {
+                    r.renderFeatureSpace(this->fsgl);
+                }
+            });
+        }
+
+        // 输入事件接线（沿用 GLContainer 处理逻辑）
+        QObject::connect(m_glView, &GLView::mousePressed, [this](int x, int y){
+            this->OnGLContainerLeftMouseDown(x, y);
+        });
+        QObject::connect(m_glView, &GLView::mouseMoved, [this](int buttons, int x, int y){
+            this->OnGLContainerMouseMove(buttons, x, y);
+        });
+        QObject::connect(m_glView, &GLView::resized, [this](int w, int h){
+            Q_UNUSED(w); Q_UNUSED(h);
+            // 首帧有效绘制：触发一次更新
+            if (m_glView) m_glView->update();
+        });
+    }
 
     Console::write("FeatureSpace -- getting pixel data...\n");
     getPixelData();
@@ -872,6 +906,17 @@ void FeatureSpace::Create() {
     glContainer = new GLContainer(this, this, 0, 0, FEATURE_WINDOW_WIDTH, FEATURE_WINDOW_HEIGHT-TOOLBAR_HEIGHT);
     glContainer->setupUI();
 
+    // 构造时若已有布局则直接加入 GLView；否则在 init 中创建
+    if (!m_glView) {
+        QVBoxLayout *lyt = new QVBoxLayout(glContainer);
+        lyt->setContentsMargins(0,0,0,0);
+        lyt->setSpacing(0);
+        m_glView = new GLView(glContainer);
+        m_glView->setMinimumSize(4,4);
+        m_glView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        lyt->addWidget(m_glView);
+    }
+
         // handle events for the window
     // prevProc=SetWindowProcedure(&WindowProcedure);  // 绉婚櫎Windows鐗瑰畾鐨勪唬鐮?
     
@@ -901,9 +946,11 @@ void FeatureSpace::OnResize()
     }
 
     if (fsgl!=NULL)
-		fsgl->resize();
+        fsgl->resize();
 		
-    if (glContainer) {
+    if (m_glView) {
+        m_glView->update();
+    } else if (glContainer) {
         glContainer->repaint();
     }
 }

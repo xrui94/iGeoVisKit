@@ -4,6 +4,7 @@
 #include "utils/Console.h"
 // #include "Window.h"  // 移除对Window.h的依赖
 #include "GLContainer.h"
+#include "gui/GLView.h"
 #include "imagery/ROI.h"
 #include "imagery/ROISet.h"
 #include "imagery/ROIFile.h"
@@ -85,6 +86,7 @@ class FeatureSpace: public QWidget, public GLContainerHandler
     protected:
 		/* GUI stuff */
         GLContainer *glContainer;
+        GLView *m_glView = nullptr;
         // HWND hRebarControl;  // 移除Windows特定的成员
 		// POINT initalMousePosition;  // 移除Windows特定的成员
 

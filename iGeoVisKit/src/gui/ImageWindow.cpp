@@ -1,5 +1,10 @@
 #include "PchApp.h"
 #include "ImageWindow.h"
+#include "MainWindow.h"
+#include "opengl/ImageViewport.h"
+#include "opengl/ImageGL.h"
+#include "opengl/Renderer.h"
+#include "opengl/OpenGLContext.h"
 
 #include "config.h"
 #include "utils/Console.h"
@@ -8,7 +13,7 @@
 #include "ToolWindow.h"
 #include "utils/Settings.h"
 #include "imagery/ImageHandler.h"
-#include "opengl/ImageViewport.h"
+//#include "opengl/ImageViewport.h"
 
 // Qt头文件
 #include <QApplication>
@@ -28,8 +33,8 @@
 
 char* imageWindowTitle;
 
-ImageWindow::ImageWindow(QWidget *parent)
-    : QWidget(parent)
+ImageWindow::ImageWindow(MainWindow* mainWidnow, QWidget *parent)
+    : QWidget(parent), m_mainWindow(mainWidnow)
     , scrollArea(nullptr)
     , imageLabel(nullptr)
     , horizontalScrollBar(nullptr)
@@ -39,8 +44,9 @@ ImageWindow::ImageWindow(QWidget *parent)
     setupUI();
     
     // 设置窗口属性
-    setWindowTitle(QStringLiteral("Image Window"));
-    resize(800, 600);
+    //setWindowTitle(QStringLiteral("Image Window"));
+    //resize(800, 600);
+    //resize(mainWidnow->width(), mainWidnow->height());
 }
 
 ImageWindow::~ImageWindow()
@@ -60,30 +66,95 @@ void ImageWindow::setupUI()
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     
-    // 直接使用自身作为 GLView 父容器（移除 DisplayWindow）
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    //// 直接使用自身作为 GLView 父容器（移除 DisplayWindow）
+    //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    // 保留滚动区域但默认不显示（用于非 OpenGL 路径或未来用）
-    scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setAlignment(Qt::AlignCenter);
-    imageLabel = new QLabel(this);
-    imageLabel->setAlignment(Qt::AlignCenter);
-    imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    scrollArea->setWidget(imageLabel);
-    scrollArea->hide();
-    
-    // 获取滚动条
-    horizontalScrollBar = scrollArea->horizontalScrollBar();
-    verticalScrollBar = scrollArea->verticalScrollBar();
-    
-    // 连接滚动条信号
-    connect(horizontalScrollBar, &QScrollBar::valueChanged, 
-            this, &ImageWindow::onHorizontalScroll);
-    connect(verticalScrollBar, &QScrollBar::valueChanged, 
-            this, &ImageWindow::onVerticalScroll);
+    //// 保留滚动区域但默认不显示（用于非 OpenGL 路径或未来用）
+    //scrollArea = new QScrollArea(this);
+    //scrollArea->setWidgetResizable(true);
+    //scrollArea->setAlignment(Qt::AlignCenter);
+    //imageLabel = new QLabel(this);
+    //imageLabel->setAlignment(Qt::AlignCenter);
+    //imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    //scrollArea->setWidget(imageLabel);
+    //scrollArea->hide();
+    //
+    //// 获取滚动条
+    //horizontalScrollBar = scrollArea->horizontalScrollBar();
+    //verticalScrollBar = scrollArea->verticalScrollBar();
+    //
+    //// 连接滚动条信号
+    //connect(horizontalScrollBar, &QScrollBar::valueChanged, 
+    //        this, &ImageWindow::onHorizontalScroll);
+    //connect(verticalScrollBar, &QScrollBar::valueChanged, 
+    //        this, &ImageWindow::onVerticalScroll);
     
     // QWidget 不使用状态栏，由 MainWindow 管理菜单/状态
+
+
+    m_glImageView = new GLView(this);
+    layout->addWidget(m_glImageView);
+
+    const auto& renderer = m_mainWindow->getRenderer();
+
+    m_glImageView->setRendererInstance(renderer);
+    m_glImageView->addRenderCallback([this](Renderer& renderer) {
+        ImageHandler* imageHandler = m_mainWindow->imageHandler();
+        if (imageHandler) {
+            m_glImageView->resize();
+            imageHandler->getImageGL()->resize(m_glImageView->width(), m_glImageView->height());    // 主要是设置 ImageGL 中的 Viewport
+            renderer.renderImageScene(imageHandler->getImageGL());
+        }
+    });
+
+    // 左键拖拽平移：记录按下位置，并在移动时根据位移更新视口
+    QObject::connect(m_glImageView, &GLView::mousePressed, [this](int wx, int wy) {
+        m_dragLastX = wx;
+        m_dragLastY = wy;
+        Console::write("Mouse pressed at (%d, %d)\n", wx, wy);
+    });
+
+    QObject::connect(m_glImageView, &GLView::mouseMoved, [this](int buttons, int wx, int wy) {
+        if (m_viewport && buttons & Qt::LeftButton) {
+            int dx = wx - m_dragLastX;
+            int dy = wy - m_dragLastY;
+            Console::write("Mouse drag: dx=%d, dy=%d, from (%d,%d) to (%d,%d)\n",
+                dx, dy, m_dragLastX, m_dragLastY, wx, wy);
+
+            // 将像素位移转换为图像坐标位移
+            float zoom_level = m_viewport->get_zoom_level();
+            int image_dx = int(round(dx / zoom_level));
+            int image_dy = int(round(dy / zoom_level));
+
+            // 拖拽到右/下：视口向左/上移动，因此减去位移
+            int old_image_x = m_viewport->get_image_x();
+            int old_image_y = m_viewport->get_image_y();
+            m_viewport->set_image_x(old_image_x - image_dx);
+            m_viewport->set_image_y(old_image_y - image_dy);
+
+            Console::write("Image coords updated: image_x %d->%d, image_y %d->%d (dx=%d, dy=%d, zoom=%.2f)\n",
+                old_image_x, m_viewport->get_image_x(), old_image_y, m_viewport->get_image_y(),
+                image_dx, image_dy, zoom_level);
+
+            m_dragLastX = wx;
+            m_dragLastY = wy;
+        }
+    });
+
+    // 鼠标滚轮缩放（以鼠标位置为锚点）
+    QObject::connect(m_glImageView, &GLView::wheelScrolled, m_glImageView, [this](int delta, int wx, int wy) {
+        if (m_viewport) {
+            float cur = m_viewport->get_zoom_level();
+            float step = (delta >= 0) ? 1.25f : 0.8f; // 每格约±120
+            int ix = 0, iy = 0;
+            m_viewport->translate_window_to_image(wx, wy, &ix, &iy);
+            m_viewport->set_zoom_level(cur * step);
+            int zx = int(round(ix * m_viewport->get_zoom_level() - wx));
+            int zy = int(round(iy * m_viewport->get_zoom_level() - wy));
+            m_viewport->set_zoom_x(zx);
+            m_viewport->set_zoom_y(zy);
+        }
+    });
 }
 
 // 菜单/动作由 MainWindow 管理
@@ -245,3 +316,20 @@ int ImageWindow::getHeight() const
 {
     return height();
 }
+
+void ImageWindow::updateImageProperties(ImageProperties* imageProps)
+{
+    if (!m_viewport) {
+        m_viewport = new ImageViewport(imageProps);
+    }
+    
+}
+
+// 设置影像拉伸模式并请求刷新
+void ImageWindow::setStretchMode(ImageGL::StretchMode m)
+{
+    //if (image_gl) {
+    //    image_gl->setStretchMode(m);
+    //}
+}
+

@@ -75,8 +75,18 @@ float ImageViewport::set_zoom_level(float zoom_value)
     
     image_x = image_x + (old_viewport_width - viewport_width)/2;
     image_y = image_y + (old_viewport_height - viewport_height)/2;
+
     // 使用统一的约束逻辑
-    clamp_coords();
+    // clamp_coords();
+
+	image_x = min(image_width - viewport_width, image_x);
+	image_y = min(image_height - viewport_height, image_y);	
+	
+	image_x = max(image_x, 0);
+	image_y = max(image_y, 0);
+	
+	zoom_x = int(round(image_x * zoom_level));
+	zoom_y = int(round(image_y * zoom_level));
     
     notify_viewport_listeners();
     return zoom_level;
@@ -105,15 +115,17 @@ int ImageViewport::get_zoom_image_height(void) {return zoom_image_height;}
 
 void ImageViewport::set_window_size(int new_window_width, int new_window_height)
 {
-    window_width = new_window_width;
-    window_height = new_window_height;
-    viewport_width = int(round((float)window_width / zoom_level));
-    viewport_height = int(round((float)window_height / zoom_level));
-    get_zoom_minimum();
-    if (zoom_level < zoom_minimum) set_zoom_level(zoom_minimum);
-    // 尺寸更新后确保坐标合法
-    clamp_coords();
-    notify_viewport_listeners();
+	window_width = new_window_width;
+	window_height = new_window_height;
+
+	viewport_width = int(round((float)window_width / zoom_level));
+	viewport_height = int(round((float)window_height / zoom_level));
+
+	// 先更新最小缩放并使用有效缩放值，避免在 zoom_level==0 时除零
+	get_zoom_minimum();
+	//float new_zoom = max(zoom_level, zoom_minimum);
+	//set_zoom_level(new_zoom);
+	if (zoom_level < zoom_minimum) set_zoom_level(zoom_minimum);
 }
 
 int ImageViewport::get_window_width(void) {return window_width;}
@@ -125,7 +137,7 @@ void ImageViewport::set_zoom_x(int new_x)
 {
     zoom_x = new_x;
     image_x = int(round(zoom_x / zoom_level));
-    clamp_coords();
+    // clamp_coords();
     notify_viewport_listeners();
 }
 
@@ -133,7 +145,7 @@ void ImageViewport::set_zoom_y(int new_y)
 {
     zoom_y = new_y;
     image_y = int(round(zoom_y / zoom_level));
-    clamp_coords();
+    // clamp_coords();
     notify_viewport_listeners();
 }
 
@@ -143,14 +155,14 @@ int ImageViewport::get_zoom_y(void) {return zoom_y;}
 void ImageViewport::set_image_x(int new_x)
 {
     image_x = new_x;
-    clamp_coords();
+    // clamp_coords();
     notify_viewport_listeners();
 }
 
 void ImageViewport::set_image_y(int new_y)
 {
     image_y = new_y;
-    clamp_coords();
+    // clamp_coords();
     notify_viewport_listeners();
 }
 

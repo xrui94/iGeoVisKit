@@ -8,7 +8,7 @@
 #include <vector>
 
 class GLText;
-class GLView;
+//class GLView;
 
 // OpenGLContext 负责集中执行底层的 DrawCall
 class OpenGLContext {
@@ -95,14 +95,14 @@ public:
 	OpenGLContext();
 	~OpenGLContext();
 
-	inline void bind(GLView* view) { m_view = view; }
-	inline GLView* boundView() const { return m_view; }
+	//inline void bind(GLView* view) { m_view = view; }
+	//inline GLView* boundView() const { return m_view; }
 
 	// 执行一组命令，确保所有 DrawCall 在此函数内部进行
 	void draw(const std::vector<Command>& commands);
 
 private:
-	GLView* m_view;
+	//GLView* m_view;
 };
 
 #endif // OPENGL_CONTEXT_H

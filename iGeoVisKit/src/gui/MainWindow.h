@@ -2,20 +2,12 @@
 #define _PARBAT_MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QWidget>
-#include <QMenuBar>
-#include <QMenu>
-#include <QAction>
-#include <QToolBar>
-#include <QStatusBar>
 #include <QVector>
 #include <QString>
-#include <QMessageBox>
-#include <QTabWidget>
-#include <QDockWidget>
-#include <QTreeWidget>
+
 #include <memory>
 #include <string>
+
 class OverviewWindow;
 class ToolWindow;
 class ROIWindow;
@@ -26,6 +18,17 @@ class ContrastAdvWindow;
 class ProgressStatusWidget;
 class Renderer;
 class ImageHandler;
+
+class QWidget;
+class QMenuBar;
+class QMenu;
+class QAction;
+class QToolBar;
+class QStatusBar;
+class QTabWidget;
+class QDockWidget;
+class QTreeWidget;
+class QTreeWidgetItem;
 
 class MainWindow : public QMainWindow
 {
@@ -41,9 +44,6 @@ public:
     void DisableAll();		/* disable all windows owned by main thread */
     void DisableAll(QWidget*);	/* disable all windows except for a particular window */
     void EnableAll();		/* enable all windows owned by main thread */
-    
-    // 添加openFile函数声明
-    void openFile();        /* open file dialog */
     
     // Qt菜单和工具栏访问
     QMenuBar* mainMenuBar() const { return menuBar(); }
@@ -75,7 +75,7 @@ public:
     // 窗口访问（统一从 MainWindow 获取）
     ImageWindow* imageWindow() const { return imageWindow_; }
     OverviewWindow* overviewWindow() const { return overviewWidget_; }
-    ToolWindow* toolWindow() const { return toolsWidget_; }
+    ToolWindow* toolWindow() const { return toolWindow_; }
     ROIWindow* roiWindow() const { return roiWindow_; }
     PrefsWindow* prefsWindow();
     ContrastWindow* contrastWindow();
@@ -90,11 +90,17 @@ public:
     const std::string& filename() const { return m_filename; }
 
 private slots:
-    void setupMenus();
-    void setupActions();
     void onFileItemActivated(QTreeWidgetItem* item, int column);
 
 private:
+    void setupMenus();
+    void setupActions();
+    void setupToolBar();
+    void setupStatusBar();
+
+    // 添加openFile函数声明
+    void openFile();        /* open file dialog */
+
     void loadFile();
 
     void loadFile(const QString& fileName);
@@ -147,7 +153,7 @@ private:
     QDockWidget* overviewDock_ = nullptr;
     OverviewWindow* overviewWidget_ = nullptr;
     QDockWidget* toolsDock_ = nullptr;
-    ToolWindow* toolsWidget_ = nullptr;
+    ToolWindow* toolWindow_ = nullptr;
     ROIWindow* roiWindow_ = nullptr; // 非模态对话框（默认隐藏）
     ImageWindow* imageWindow_ = nullptr; // 中央 Image 页中的嵌入式视图
 
@@ -158,7 +164,9 @@ private:
     ProgressStatusWidget* progressWidget_ = nullptr;
 
     // 工具栏（用于统一入口）
-    QToolBar* toolsBar_ = nullptr;
+    QToolBar* m_toolsBar = nullptr;
+
+    QStatusBar* m_statusBar = nullptr;
     
     // 统一的 Renderer 实例
     std::shared_ptr<Renderer> renderer_;

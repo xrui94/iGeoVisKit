@@ -4,6 +4,10 @@
 #include <QWidget>
 #include <QMenu>
 
+class GLView;
+class Renderer;
+class OverviewGL;
+
 
 class OverviewWindow : public QWidget
 {
@@ -26,8 +30,12 @@ public:
     // 直接使用自身作为 OpenGL 父控件
     QWidget* displayWidget() { return this; }
 
+    // 将 Renderer 与 OverviewGL 目标接线到内部 GLView
+    void attachRendererAndOverview(const std::shared_ptr<Renderer>& renderer, OverviewGL* ov);
+
 private:
     QMenu *mainMenu_;
+    GLView* m_glView = nullptr;
     
     static const int WIDTH = 250;  // width of the overview window in pixels
     static const int HEIGHT = 296;

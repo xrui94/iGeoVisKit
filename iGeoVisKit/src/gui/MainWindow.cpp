@@ -1,17 +1,4 @@
-﻿#include "PchApp.h"
-
-#include "MainWindow.h"
-#include <QApplication>
-#include <QMenuBar>
-#include <QMenu>
-#include <QAction>
-#include <QMessageBox>
-#include <QFileDialog>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QDockWidget>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
+#include "PchApp.h"
 #include "OverviewWindow.h"
 #include "ToolWindow.h"
 #include "ROIWindow.h"
@@ -25,6 +12,23 @@
 #include "opengl/Renderer.h"
 #include "imagery/ImageHandler.h"
 
+#include "MainWindow.h"
+#include <QWidget>
+#include <QApplication>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QStatusBar>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QTabWidget>
+#include <QDockWidget>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
+
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
@@ -33,24 +37,36 @@ MainWindow::MainWindow(QWidget *parent)
     
     setupActions();
     setupMenus();
+
+    setupToolBar();
+
+    setupStatusBar();
     
-    // 璁剧疆绐楀彛鏍囬
+    // 窗口标题
     setWindowTitle("Parbat3D");
+    // 窗口初始尺寸
+    resize(1200, 800);
     
     // 鍒涘缓涓ぎ Tab 瀹瑰櫒
     centralTabs_ = new QTabWidget(this);
     setCentralWidget(centralTabs_);
 
-    // 娣诲姞鈥淚mage鈥濋〉锛氬祵鍏ョ幇鏈?ImageWindow 浣滀负涓績瑙嗗浘锛岄伩鍏嶉《灞傜獥鍙ｅ脊鍑?
-    imageTabPage_ = new QWidget(centralTabs_);
-    {
-        QVBoxLayout *imageLayout = new QVBoxLayout(imageTabPage_);
-        imageLayout->setContentsMargins(0,0,0,0);
-        imageWindow_ = new ImageWindow(this);
-        imageWindow_->Create(this);
-        imageLayout->addWidget(imageWindow_);
-    }
-    centralTabs_->addTab(imageTabPage_, QStringLiteral("Image"));
+    //// 娣诲姞鈥淚mage鈥濋〉锛氬祵鍏ョ幇鏈?ImageWindow 浣滀负涓績瑙嗗浘锛岄伩鍏嶉《灞傜獥鍙ｅ脊鍑?
+    //imageTabPage_ = new QWidget(centralTabs_);
+    //{
+    //    QVBoxLayout *imageLayout = new QVBoxLayout(imageTabPage_);
+    //    imageLayout->setContentsMargins(0,0,0,0);
+    //    imageWindow_ = new ImageWindow(this);
+    //    imageWindow_->Create(this);
+    //    imageLayout->addWidget(imageWindow_);
+    //}
+    //centralTabs_->addTab(imageTabPage_, QStringLiteral("Image"));
+
+    imageWindow_ = new ImageWindow(this, this);
+    centralTabs_->addTab(imageWindow_, QStringLiteral("Image"));
+    //QVBoxLayout *imageLayout = new QVBoxLayout(imageTabPage_);
+    //imageLayout->setContentsMargins(0,0,0,0);
+
     // ImageWindow 宸插祵鍏ヤ腑澶爣绛鹃〉
 
     // 宸︿晶锛氭枃浠舵爲 Dock
@@ -71,9 +87,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 鍙充晶锛歍ools Dock
     toolsDock_ = new QDockWidget(QStringLiteral("Tools"), this);
-    toolsWidget_ = new ToolWindow(this);
-    toolsWidget_->Create(this);
-    toolsDock_->setWidget(toolsWidget_);
+    toolWindow_ = new ToolWindow(this);
+    //toolWindow_->Create(this);
+    toolsDock_->setWidget(toolWindow_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock_);
 
     // ROI 闈炴ā鎬佸璇濇锛堥粯璁ら殣钘忥級
@@ -82,9 +98,6 @@ MainWindow::MainWindow(QWidget *parent)
     roiWindow_->hide();
 
     // 姒傝涓庡伐鍏风獥鍙ｅ凡浣滀负 Dock 绠＄悊
-    
-    // 璁剧疆绐楀彛澶у皬
-    resize(800, 600);
 }
 
 MainWindow::~MainWindow()
@@ -153,7 +166,7 @@ void MainWindow::setupActions()
 
 void MainWindow::setupMenus()
 {
-    // 鏂囦欢鑿滃崟
+    // 文件菜单
     fileMenu_ = menuBar()->addMenu("&File");
     fileMenu_->addAction(openAction_);
     fileMenu_->addAction(saveAction_);
@@ -163,7 +176,14 @@ void MainWindow::setupMenus()
     fileMenu_->addSeparator();
     fileMenu_->addAction(exitAction_);
     
-    // 绐楀彛鑿滃崟
+    // 视图菜单
+    viewMenu_ = menuBar()->addMenu("&View");
+    viewMenu_->addAction(zoomInAction_);
+    viewMenu_->addAction(zoomOutAction_);
+    viewMenu_->addSeparator();
+    viewMenu_->addAction(fitToWindowAction_);
+
+    // 窗口菜单
     windowMenu_ = menuBar()->addMenu("&Window");
     windowMenu_->addAction(imageWindowAction_);
     windowMenu_->addAction(toolsWindowAction_);
@@ -172,24 +192,32 @@ void MainWindow::setupMenus()
     windowMenu_->addAction(contrastWindowAction_);
     windowMenu_->addAction(contrastAdvWindowAction_);
 
-    // 瑙嗗浘鑿滃崟锛堟斁澶?缂╁皬/閫傞厤绐楀彛锛?
-    viewMenu_ = menuBar()->addMenu("&View");
-    viewMenu_->addAction(zoomInAction_);
-    viewMenu_->addAction(zoomOutAction_);
-    viewMenu_->addSeparator();
-    viewMenu_->addAction(fitToWindowAction_);
 
-    // 甯姪鑿滃崟
+    // 帮助菜单
     helpMenu_ = menuBar()->addMenu("&Help");
     helpMenu_->addAction(helpContentsAction_);
     helpMenu_->addAction(aboutAction_);
+}
 
-    // 缁熶竴鍏ュ彛鍒板伐鍏锋爮
-    toolsBar_ = addToolBar("Tools");
-    toolsBar_->addAction(roiWindowAction_);
-    toolsBar_->addAction(contrastWindowAction_);
-    toolsBar_->addAction(contrastAdvWindowAction_);
-    toolsBar_->addAction(prefsWindowAction_);
+void MainWindow::setupToolBar()
+{
+    m_toolsBar = new QToolBar();
+
+    //
+    //m_toolsBar = addToolBar("Tools");
+    m_toolsBar->addAction(roiWindowAction_);
+    m_toolsBar->addAction(contrastWindowAction_);
+    m_toolsBar->addAction(contrastAdvWindowAction_);
+    m_toolsBar->addAction(prefsWindowAction_);
+
+    // 添加到窗口
+    addToolBar(m_toolsBar);
+}
+
+void MainWindow::setupStatusBar()
+{
+    m_statusBar = this->statusBar();
+    this->setStatusBar(m_statusBar);
 }
 
 void MainWindow::openFile()
@@ -293,9 +321,10 @@ ProgressStatusWidget* MainWindow::progressWidget()
 {
     if (!progressWidget_) {
         progressWidget_ = new ProgressStatusWidget(this);
-        if (statusBar()) {
-            statusBar()->addPermanentWidget(progressWidget_, 0);
-        }
+        //if (statusBar()) {
+        //    statusBar()->addPermanentWidget(progressWidget_, 0);
+        //}
+        m_statusBar->addPermanentWidget(progressWidget_, 0);
         progressWidget_->setVisible(false);
     }
     return progressWidget_;
@@ -308,8 +337,8 @@ void MainWindow::loadFile(const QString& fileName) {
     closeFile();
 
     // 鏂囦欢瀵硅瘽妗嗗叧闂悗锛岀‘淇濅富绐楀彛淇濇寔鍓嶅彴鍙涓庢縺娲?
-    ensureVisibleAndActive();
-    forceRefreshUI();
+    //ensureVisibleAndActive();
+    //forceRefreshUI();
 
     // 灏嗘枃浠跺悕淇濆瓨涓?C 椋庢牸瀛楃涓蹭緵 GDAL 浣跨敤
     QByteArray utf8Bytes = fileName.toUtf8();
@@ -326,34 +355,34 @@ void MainWindow::loadFile(const QString& fileName) {
 
     // 鏋勫缓 GDAL 鍥惧儚澶勭悊绠＄嚎
     try {
-        QWidget* overviewParent = nullptr;
-        QWidget* imageParent = nullptr;
+        //QWidget* overviewParent = nullptr;
+        //QWidget* imageParent = nullptr;
 
-        // 淇濇姢鎬ч€夋嫨鐖剁獥鍙ｏ紝閬垮厤绌烘寚閽堟柇瑷€
-        if (this->overviewWindow()) {
-            // 灏嗘瑙堢殑 OpenGL 瀹瑰櫒浼犲叆
-            overviewParent = this->overviewWindow()->displayWidget();
-        } else if (overviewDock_) {
-            overviewParent = overviewDock_->widget();
-        } else {
-            overviewParent = this;
-        }
+        //// 淇濇姢鎬ч€夋嫨鐖剁獥鍙ｏ紝閬垮厤绌烘寚閽堟柇瑷€
+        //if (this->overviewWindow()) {
+        //    // 灏嗘瑙堢殑 OpenGL 瀹瑰櫒浼犲叆
+        //    overviewParent = this->overviewWindow()->displayWidget();
+        //} else if (overviewDock_) {
+        //    overviewParent = overviewDock_->widget();
+        //} else {
+        //    overviewParent = this;
+        //}
 
-        if (this->imageWindow()) {
-            // 鐩存帴浣跨敤 ImageWindow 鑷韩浣滀负 OpenGL 鐖舵帶浠?
-            imageParent = this->imageWindow();
-        } else if (imageTabPage_) {
-            imageParent = imageTabPage_;
-        } else {
-            imageParent = this;
-        }
+        //if (this->imageWindow()) {
+        //    // 鐩存帴浣跨敤 ImageWindow 鑷韩浣滀负 OpenGL 鐖舵帶浠?
+        //    imageParent = this->imageWindow();
+        //} else if (imageTabPage_) {
+        //    imageParent = imageTabPage_;
+        //} else {
+        //    imageParent = this;
+        //}
 
         // 鍔犺浇杩囩▼鍙兘杈冮噸锛屾彁鍓嶅鐞嗕竴娆′簨浠讹紝閬垮厤涓荤獥鍙ｂ€滄秷澶扁€濋敊瑙?
         QApplication::processEvents(QEventLoop::AllEvents);
 
         m_imageHandler = std::make_unique<ImageHandler>(
-            /* overview parent */ overviewParent,
-            /* image parent */ imageParent,
+            ///* overview parent */ overviewParent,
+            ///* image parent */ imageParent,
             /* filename */ m_filename.c_str(),
             /* ROI set */ regionsSet,
             /* renderer */ this->getRenderer());
@@ -370,15 +399,48 @@ void MainWindow::loadFile(const QString& fileName) {
     }
 
     // 鏇存柊绐楀彛鏍囬骞舵樉绀虹浉鍏崇獥鍙?
-    if (this->imageWindow()) {
-        this->imageWindow()->setWindowTitle(QStringLiteral("Image Window - ") + QFileInfo(fileName).fileName());
+    if (imageWindow_) {
+        imageWindow_->setWindowTitle(QStringLiteral("Image Window - ") + QFileInfo(fileName).fileName());
     }
+
+    // 接线：将 Renderer 与 OverviewGL 连接到概览窗口的 GLView
+    if (overviewWidget_ && renderer_) {
+        overviewWidget_->attachRendererAndOverview(renderer_, m_imageHandler->getOverviewGL());
+    }
+
+    // 绑定 ImageWindow 的鼠标交互到同一视口，保持交互一致
+    if (imageWindow_ && m_imageHandler) {
+        imageWindow_->setViewport(m_imageHandler->get_image_viewport());
+    }
+
+    //// 连接 ImageWindow 内部 GLView 的 resized 信号到视口，确保首次绘制有效
+    //if (imageWindow_) {
+    //    GLView* glView = imageWindow_->getGLView();
+    //    if (glView) {
+    //        QObject::connect(glView, &GLView::resized, [this](int w, int h){
+    //            if (m_imageHandler && m_imageHandler->get_image_viewport()) {
+    //                m_imageHandler->get_image_viewport()->set_window_size(w, h);
+    //                m_imageHandler->redraw();
+    //            }
+    //        });
+    //        // 接线后立即同步当前窗口尺寸并触发一次重绘，避免首次黑屏
+    //        if (m_imageHandler && m_imageHandler->get_image_viewport()) {
+    //            int cw = glView->width();
+    //            int ch = glView->height();
+    //            if (cw > 0 && ch > 0) {
+    //                m_imageHandler->get_image_viewport()->set_window_size(cw, ch);
+    //                m_imageHandler->redraw();
+    //            }
+    //        }
+    //    }
+    //}
+
     // ImageWindow 宸插祵鍏ヤ腑澶爣绛鹃〉锛屾棤闇€鍗曠嫭鏄剧ず椤跺眰绐楀彛
-    if (this->overviewWindow()) this->overviewWindow()->show();
-    if (this->toolWindow()) {
-        this->toolWindow()->show();
+    //if (this->overviewWindow()) this->overviewWindow()->show();
+    if (toolWindow_) {
+        //this->toolWindow()->show();
         // 打开影像后刷新 DisplayTab 的波段下拉框
-        this->toolWindow()->refreshBands();
+        toolWindow_->refreshBands();
     }
     QApplication::processEvents(QEventLoop::AllEvents);
     // ROI 闈炴ā鎬佸璇濇榛樿闅愯棌锛屾寜闇€閫氳繃鑿滃崟鏄剧ず
@@ -386,15 +448,17 @@ void MainWindow::loadFile(const QString& fileName) {
 
     // 缁撴潫杩涘害骞惰Е鍙戦娆￠噸缁?
     if (pw) pw->end();
+
     // 纭繚绐楀彛鍜孏L瑙嗗浘鍦ㄩ娆＄粯鍒跺墠鏀跺埌涓€娆″竷灞€涓庣粯鍒朵簨浠?
     QApplication::processEvents(QEventLoop::AllEvents);
-    // 鍒濇璁剧疆 GL 瑙嗗浘绐楀彛灏哄锛岄伩鍏嶉娆＄粯鍒朵负闆跺昂瀵稿鑷撮粦灞?
-    m_imageHandler->resize_image_window();
+
+    //
+    //m_imageHandler->resize_image_window();
     m_imageHandler->redraw();
 
-    // 鍐嶆纭繚绐楀彛澶勪簬婵€娲荤姸鎬佸苟寮哄埗鍒锋柊锛岄伩鍏嶅嚭鐜扮櫧灞忔垨鑿滃崟鏍忎笉缁樺埗
-    ensureVisibleAndActive();
-    forceRefreshUI();
+    //// 鍐嶆纭繚绐楀彛澶勪簬婵€娲荤姸鎬佸苟寮哄埗鍒锋柊锛岄伩鍏嶅嚭鐜扮櫧灞忔垨鑿滃崟鏍忎笉缁樺埗
+    //ensureVisibleAndActive();
+    //forceRefreshUI();
 
     // 鏇存柊涓昏彍鍗曚腑涓庢枃浠?绐楀彛鐩稿叧鐨勫姩浣滅姸鎬?
     if (closeAction_) closeAction_->setEnabled(true);

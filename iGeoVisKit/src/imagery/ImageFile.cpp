@@ -7,7 +7,7 @@
 #include <QMessageBox>
 
 // 前置声明：避免引入 main.h 造成不必要依赖
-void emptyOutMessageQueue();
+// void emptyOutMessageQueue();
 
 /*
 ImageFile
@@ -138,7 +138,7 @@ Fill a buffer with raster data from the file, as specified.
 */
 void ImageFile::getRasterData(int width, int height, int xpos, int ypos, char* buffer, int outWidth, int outHeight)
 {
-	emptyOutMessageQueue();	// prevent program from entering "not-responding" state
+	// emptyOutMessageQueue();	// prevent program from entering "not-responding" state
 
 	int startTime = 0;
 	int endTime = 0;

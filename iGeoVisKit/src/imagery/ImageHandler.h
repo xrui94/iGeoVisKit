@@ -1,7 +1,7 @@
 #ifndef _IMAGE_HANDLER_H
 #define _IMAGE_HANDLER_H
 
-#include <QWidget>
+// #include <QWidget>
 #include <memory>
 #include "ImageFile.h"
 #include "ImageProperties.h"
@@ -16,7 +16,7 @@ class ImageHandler
 {
 public:
     /* Class Operators */
-    ImageHandler(QWidget* overview_widget, QWidget* image_widget, const char* filename, ROISet *ROI_set, std::shared_ptr<Renderer> renderer);
+    ImageHandler(const char* filename, ROISet *ROI_set, std::shared_ptr<Renderer> renderer);
 	virtual ~ImageHandler(void);
 	
 	/* Data Operators */
@@ -26,7 +26,12 @@ public:
 	
 	/* Window Operators */
 	void redraw(void);
-	void resize_image_window(void);
+
+	//
+	ImageGL* getImageGL() const { return image_gl; }
+	OverviewGL* getOverviewGL() const { return overview_gl; }
+
+	//void resize_image_window(void);
 	ImageViewport* get_image_viewport(void) {return image_viewport;}
 	ImageFile* get_image_file(void) {return image_file;}
 	
