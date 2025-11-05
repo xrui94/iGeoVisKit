@@ -11,8 +11,7 @@ An open-source platform for the visualization and analysis of GIS data and remot
 | Language | C++(std=c++17)                            |
 | C++ Package Manager | vcpkg                            |
 | IDE      | Visual Studio 2022                        |
-| LIB      | Qt 6.8.3、glm、GDAL、spdlog、glad |
-
+| LIB      | Qt 6.8.3、GDAL、glm、glad |
 
 ## 🛠️ Compile and Run
 
