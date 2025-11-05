@@ -6,3 +6,10 @@
 build/
 
 source-bak/
+
+*.log
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.db
