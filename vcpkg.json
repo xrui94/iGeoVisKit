@@ -2,11 +2,6 @@
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "dependencies": [
         {
-            "name": "spdlog",
-            "version>=": "1.15.3",
-            "platform": "x64"
-        },
-        {
             "name": "gdal",
             "platform": "x64"
         },

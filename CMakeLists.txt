@@ -30,7 +30,7 @@ if(WIN32)
 endif()
 
 # 添加 iGeoVisKit 头文件目录
-include_directories(iGeoVisKit/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # 定义预处理器宏（用于兼容性和跨平台）
 add_definitions(
@@ -52,14 +52,15 @@ add_definitions(
 set(SRC_FILES "")
 
 # 源文件、资源文件
-file(GLOB_RECURSE CODE_FILES "iGeoVisKit/src/*.cpp")
+file(GLOB_RECURSE SOURCE_CODE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(APPEND SRC_FILES
-    ${CODE_FILES}
+    ${SOURCE_CODE_FILES}
     ${CMAKE_SOURCE_DIR}/resources/app.rc
+    ${CMAKE_SOURCE_DIR}/resources/app.qrc
 )
 
 # 头文件
-file(GLOB_RECURSE HEADER_FILES "iGeoVisKit/src/*.h" "iGeoVisKit/src/*.hpp")
+file(GLOB_RECURSE HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
 
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SRC_FILES} ${HEADER_FILES})
