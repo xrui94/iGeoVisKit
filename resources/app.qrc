@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>open.ico</file>
+        <file>zoomin.svg</file>
+        <file>zoomout.svg</file>
+        <file>pan.svg</file>
+        <file>single.ico</file>
+    </qresource>
+</RCC>
