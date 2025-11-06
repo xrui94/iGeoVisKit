@@ -2,6 +2,8 @@
 
 An open-source platform for the visualization and analysis of GIS data and remote sensing imagery(e.g. multispectral images and hyperspectral images from UAVs or satellites).
 
+![test_landsat8.png](./imgs/test_landsat8.png)
+
 **Thanks:** This project is a derivative of Project (Parbat3D)[https://github.com/rowanj/Parbat3D] and draws heavy inspiration from it. Many thanks to the original authors for their excellent work.
 
 ## Development Envirement
