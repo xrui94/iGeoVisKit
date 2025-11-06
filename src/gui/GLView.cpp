@@ -111,9 +111,9 @@ void GLView::paintGL()
 {
     if (m_initialized) {
         // 清除缓冲区，随后委托渲染器进行绘制
-        glClearColor(0.2f, 0.2f, 0.9f, 1.0f);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
+        //glEnable(GL_DEPTH_TEST);//    目前都是2D渲染，暂时不开启深度测试，而且，最好不要在这里设置，而是在渲染每个 Mesh 时，再设置
         glDepthFunc(GL_LESS);
         // 上下文已由 QOpenGLWidget 设为当前
         if (rendererInstance) {
@@ -130,7 +130,7 @@ void GLView::paintGL()
         }
     }
     else {
-        glClearColor(0.2f, 0.2f, 0.9f, 1.0f);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 }

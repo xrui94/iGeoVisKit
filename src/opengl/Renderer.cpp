@@ -119,9 +119,9 @@ void Renderer::renderImageScene(ImageGL* igl) const
 	}
 	std::vector<OpenGLContext::Command> cmds;
 	cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
-	cmds.back().clearColorR = 0.0f;
-	cmds.back().clearColorG = 0.0f;
-	cmds.back().clearColorB = 0.0f;
+	cmds.back().clearColorR = 1.0f;	// 有的影像是有黑边的，NoData区域，因此，最好不要设置背景色也为黑色
+	cmds.back().clearColorG = 1.0f;
+	cmds.back().clearColorB = 1.0f;
 	cmds.back().clearColorA = 0.0f;
 
 	// 如果视口无效，则仅清空后返回，避免后续计算与绘制出错
@@ -520,9 +520,9 @@ void Renderer::renderOverview(OverviewGL* ov)
 	}
 	std::vector<OpenGLContext::Command> cmds;
 	cmds.push_back({ OpenGLContext::CmdType::ClearColorDepth });
-	cmds.back().clearColorR = 0.0f;
-	cmds.back().clearColorG = 0.0f;
-	cmds.back().clearColorB = 0.0f;
+	cmds.back().clearColorR = 1.0f;	// 有的影像是有黑边的，NoData区域，因此，最好不要设置背景色也为黑色
+	cmds.back().clearColorG = 1.0f;
+	cmds.back().clearColorB = 1.0f;
 	cmds.back().clearColorA = 0.0f;
 
 	glm::mat4 proj = glm::ortho(0.0f, 1.0f, 1.0f, 0.0f);

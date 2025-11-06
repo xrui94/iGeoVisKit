@@ -163,13 +163,14 @@ void MainWindow::setupActions()
 	panAction_ = new QAction("&Pan", this);
 	panAction_->setIcon(QIcon(":/icons/pan.svg"));
 	panAction_->setCheckable(true);
-	panAction_->setChecked(true);
-    // 鍒濆绂佺敤锛屽緟鎴愬姛鍔犺浇鍥惧儚鍚庡惎鐢?
+	//panAction_->setChecked(true); // 默认不选中
+    // 
     zoomInAction_->setEnabled(false);
     zoomOutAction_->setEnabled(false);
     fitToWindowAction_->setEnabled(false);
     panAction_->setEnabled(false);
-    // 杩炴帴鍒?ImageWindow 鐨勬Ы鍑芥暟
+
+    // 
     connect(zoomInAction_, &QAction::triggered, [this] { if (imageWindow_) imageWindow_->zoomIn(); });
     connect(zoomOutAction_, &QAction::triggered, [this] { if (imageWindow_) imageWindow_->zoomOut(); });
     connect(fitToWindowAction_, &QAction::toggled, [this](bool checked) { if (imageWindow_) imageWindow_->setFitToWindow(checked); });
@@ -222,7 +223,26 @@ void MainWindow::setupToolBar()
 	m_toolsBar->addAction(zoomInAction_);
 	m_toolsBar->addAction(zoomOutAction_);
 	m_toolsBar->addAction(panAction_);
-	addToolBar(m_toolsBar);
+
+    //
+    m_toolsBar->setStyleSheet(R"(
+        QToolButton:checked {
+            background-color: rgba(0, 123, 255, 0.15);   /* 浅蓝半透明 */
+            border: 1px solid #B3D9FF;                    /* 淡蓝色边框 */
+            color: #0078D4;                              /* 文字稍深 */
+        }
+        QToolButton {
+            padding: 5px;
+            border: 1px solid #DDDDDD;
+            border-radius: 3px;
+            background-color: transparent;
+        }
+        QToolButton:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+    )");
+
+    addToolBar(m_toolsBar);
 }
 
 void MainWindow::setupStatusBar()
